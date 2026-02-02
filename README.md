@@ -45,6 +45,28 @@ create: (_) => BleDeviceService(),  // instead of MockDeviceService()
 
 No other UI code changes required.
 
+# Wicked Rolling Ball Pro App
+
+Flutter-based mobile application for the Wicked Rolling Ball Pro.
+
+## Features
+- Real-time play session tracking
+- Battery-aware safety handling
+- AI-generated play reports
+- Map-based activity visualization
+- BLE-ready architecture (mock data for now)
+
+## Tech Stack
+- Flutter (Dart)
+- MVVM-style architecture
+- Mock data → BLE-ready
+- Designed for ESP32 IoT integration
+
+## Status
+🚧 UI + architecture complete  
+🔌 BLE integration coming soon
+
+
 ## Tech Stack
 
 - Flutter 3.x

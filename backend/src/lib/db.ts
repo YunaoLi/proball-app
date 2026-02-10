@@ -1,16 +1,22 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
-const connectionString = process.env.DATABASE_URL;
+let connectionString = process.env.DATABASE_URL ?? undefined;
 
-// Neon requires SSL; ensure it's enabled when DATABASE_URL contains sslmode
+// Neon requires SSL. Use verify-full to match current secure behavior and silence pg warning
+// (pg v9 will change sslmode=require semantics; see https://www.postgresql.org/docs/current/libpq-ssl.html)
+if (connectionString?.includes("sslmode=require")) {
+  connectionString = connectionString.replace("sslmode=require", "sslmode=verify-full");
+}
+if (connectionString?.includes("ssl=true") && !connectionString.includes("sslmode=")) {
+  connectionString = connectionString.replace("ssl=true", "sslmode=verify-full");
+}
+
 const ssl =
-  connectionString?.includes("sslmode=require") || connectionString?.includes("ssl=true")
+  connectionString?.includes("sslmode=verify-full") || connectionString?.includes("sslmode=require")
     ? { rejectUnauthorized: true }
     : undefined;
 
-const pool = connectionString
-  ? new Pool({ connectionString, ssl })
-  : null;
+const pool = connectionString ? new Pool({ connectionString, ssl }) : null;
 
 export type QueryParams = unknown[];
 

@@ -1,18 +1,26 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Authentication (Better Auth)
+## Authentication (Better Auth + JWT)
 
-Auth is handled by [Better Auth](https://better-auth.com) with email/password. The handler is mounted at **GET/POST** `/api/auth/[...all]` (runtime: **nodejs**). Protected API routes use the **session from cookies** (no JWT).
+Auth is handled by [Better Auth](https://better-auth.com) with email/password. The handler is mounted at **GET/POST** `/api/auth/[...all]` (runtime: **nodejs**). Protected API routes require **Authorization: Bearer &lt;JWT&gt;** (see `requireJWT` in `src/lib/auth.ts`). Cookie sessions are deprecated in favor of JWT for mobile.
 
 ### Environment variables
 
-- `BETTER_AUTH_SECRET` – Secret for signing (min 32 chars; e.g. `openssl rand -base64 32`).
-- `BETTER_AUTH_URL` – Base URL of the app (e.g. `http://localhost:3000` or `https://your-app.vercel.app`).
-- `DATABASE_URL` – PostgreSQL connection string (Better Auth stores users and sessions).
+See `src/lib/env.ts` for the full list. Required and optional:
+
+- `BETTER_AUTH_SECRET` – Secret for Better Auth (min 32 chars; e.g. `openssl rand -base64 32`). **Do not commit.**
+- `BETTER_AUTH_URL` – Base URL of the app (e.g. `http://localhost:3001` or `https://your-app.vercel.app`).
+- `DATABASE_URL` – PostgreSQL connection string (Better Auth stores users, sessions, and JWKS).
+- `JWT_ISSUER` – JWT issuer claim (default: `proball-app`).
+- `JWT_AUDIENCE` – JWT audience claim (default: `proball-mobile`).
+- `JWT_EXPIRES_IN` – Access token lifetime, e.g. `15m`, `1h` (default: `15m`).
+- `JWT_SIGNING_ALG` – Signing algorithm (default: `RS256`). JWKS at **GET** `/api/auth/jwks`.
+
+For **JWT** flow (mobile): **POST** `/api/auth/token` with `{ email, password }` to get an access token; then send **Authorization: Bearer &lt;token&gt;** on protected routes. See **`docs/jwt_test.md`** for cURL examples.
 
 ### Create auth tables
 
-Run the Better Auth CLI to create user/session tables:
+Run the Better Auth CLI to create user/session (and JWT plugin `jwks`) tables:
 
 ```bash
 npx @better-auth/cli migrate

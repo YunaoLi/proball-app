@@ -24,10 +24,10 @@ export function jsonSuccess<T extends Record<string, unknown>>(data: T, status =
   return Response.json({ ...data, ok: true }, { status });
 }
 
-/** Placeholder for unimplemented endpoints: 501 with error shape { error: { code, message } }. */
+/** Placeholder for unimplemented endpoints: 501 with standard error shape. */
 export function jsonNotImplemented(message = "Not implemented"): Response {
   return Response.json(
-    { error: { code: "NOT_IMPLEMENTED", message } },
+    { ok: false, code: "NOT_IMPLEMENTED", message },
     { status: 501 }
   );
 }

@@ -1,6 +1,6 @@
-import { requireAuth } from "@/lib/auth";
+import { requireJWT, jsonError } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";
-import { jsonError, jsonSuccess } from "@/lib/http";
+import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
 const UUID_REGEX =
@@ -13,9 +13,9 @@ function isValidUuid(s: string): boolean {
 type PairBody = { deviceId?: string; deviceName?: string };
 
 export async function POST(req: Request) {
-  const auth = await requireAuth(req);
-  if (auth instanceof Response) return auth;
-  const { userId } = auth;
+  const authed = await requireJWT(req);
+  if (authed instanceof Response) return authed;
+  const { userId } = authed;
 
   let body: PairBody;
   try {

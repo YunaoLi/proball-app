@@ -1,5 +1,50 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Authentication (Better Auth)
+
+Auth is handled by [Better Auth](https://better-auth.com) with email/password. The handler is mounted at **GET/POST** `/api/auth/[...all]` (runtime: **nodejs**). Protected API routes use the **session from cookies** (no JWT).
+
+### Environment variables
+
+- `BETTER_AUTH_SECRET` – Secret for signing (min 32 chars; e.g. `openssl rand -base64 32`).
+- `BETTER_AUTH_URL` – Base URL of the app (e.g. `http://localhost:3000` or `https://your-app.vercel.app`).
+- `DATABASE_URL` – PostgreSQL connection string (Better Auth stores users and sessions).
+
+### Create auth tables
+
+Run the Better Auth CLI to create user/session tables:
+
+```bash
+npx @better-auth/cli migrate
+```
+
+### cURL examples (cookies)
+
+**Sign up** (saves session cookie to `cookies.txt`):
+
+```bash
+curl -c cookies.txt -X POST http://localhost:3000/api/auth/sign-up/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"your-password","name":"Your Name"}'
+```
+
+**Sign in** (updates session cookie):
+
+```bash
+curl -c cookies.txt -X POST http://localhost:3000/api/auth/sign-in/email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"your-password"}'
+```
+
+**Call a protected route** (send cookie back):
+
+```bash
+curl -b cookies.txt http://localhost:3000/api/me
+# -> {"userId":"...","ok":true}
+```
+
+Without a valid session cookie, `/api/me` and other protected routes return **401**.
+
 ## Getting Started
 
 First, run the development server:

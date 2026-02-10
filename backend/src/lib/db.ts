@@ -18,6 +18,12 @@ const ssl =
 
 const pool = connectionString ? new Pool({ connectionString, ssl }) : null;
 
+/** Returns the shared pg Pool (for Better Auth etc.). Throws if DATABASE_URL is not set. */
+export function getPool(): Pool {
+  if (!pool) throw new Error("DATABASE_URL is not set");
+  return pool;
+}
+
 export type QueryParams = unknown[];
 
 /**

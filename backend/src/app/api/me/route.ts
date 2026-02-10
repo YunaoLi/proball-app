@@ -1,14 +1,8 @@
-import { verifyJwtAndGetUserId, jsonError, AuthError } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { jsonSuccess } from "@/lib/http";
 
 export async function GET(req: Request) {
-  try {
-    const userId = await verifyJwtAndGetUserId(req);
-    return jsonSuccess({ userId });
-  } catch (e) {
-    if (e instanceof AuthError) {
-      return jsonError(401, e.code, e.message);
-    }
-    return jsonError(500, "internal_error", "Internal server error");
-  }
+  const auth = await requireAuth(req);
+  if (auth instanceof Response) return auth;
+  return jsonSuccess({ userId: auth.userId });
 }

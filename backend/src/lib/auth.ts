@@ -1,59 +1,24 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import { logger } from "./logger";
+import { betterAuth } from "better-auth";
+import { getPool } from "./db";
 import { jsonError as httpJsonError } from "./http";
-
-const issuer = process.env.NEON_AUTH_ISSUER;
-const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
-
-let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
-
-function getJwks() {
-  if (!jwksUrl) throw new Error("NEON_AUTH_JWKS_URL is not set");
-  if (!cachedJwks) cachedJwks = createRemoteJWKSet(new URL(jwksUrl));
-  return cachedJwks;
-}
+import { logger } from "./logger";
 
 /**
- * Extracts the Bearer token from Authorization header.
- * Returns null if header is missing or not Bearer.
+ * Better Auth instance: sign-up, sign-in, session (cookies).
+ * Mount handler at GET/POST /api/auth/[...all].
+ * Database: same Postgres pool as app (DATABASE_URL + SSL in db.ts).
  */
-export function getBearerToken(req: Request): string | null {
-  const auth = req.headers.get("Authorization");
-  if (!auth || !auth.startsWith("Bearer ")) return null;
-  return auth.slice(7).trim() || null;
-}
-
-/**
- * Verifies the request's JWT via JWKS and returns the userId (sub claim).
- * Throws on missing/invalid token or misconfiguration.
- */
-export async function verifyJwtAndGetUserId(req: Request): Promise<string> {
-  const token = getBearerToken(req);
-  if (!token) {
-    logger.warn("Auth failure: missing or invalid Authorization header");
-    throw new AuthError("missing_token", "Missing or invalid Authorization header");
-  }
-
-  if (!issuer) throw new Error("NEON_AUTH_ISSUER is not set");
-
-  try {
-    const jwks = getJwks();
-    const { payload } = await jwtVerify(token, jwks, {
-      issuer,
-      typ: "JWT",
-    });
-    const sub = payload.sub;
-    if (typeof sub !== "string" || !sub) {
-      logger.warn("Auth failure: JWT missing sub claim");
-      throw new AuthError("invalid_claims", "JWT missing sub claim");
-    }
-    return sub;
-  } catch (e) {
-    if (e instanceof AuthError) throw e;
-    logger.warn("Auth failure: token verification failed", String(e));
-    throw new AuthError("invalid_token", "Token verification failed");
-  }
-}
+export const auth = betterAuth({
+  database: getPool(), // pg Pool from db.ts (DATABASE_URL, Neon SSL)
+  basePath: "/api/auth",
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL:
+    process.env.BETTER_AUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001"),
+  emailAndPassword: {
+    enabled: true,
+  },
+});
 
 export class AuthError extends Error {
   constructor(
@@ -66,14 +31,20 @@ export class AuthError extends Error {
 }
 
 /**
- * Verifies JWT and returns userId, or a 401/500 Response. Use in protected routes.
+ * Verifies session from request (cookies) and returns userId, or a 401/500 Response.
+ * Use in protected API routes. Session is from Better Auth (no JWT).
  */
 export async function requireAuth(req: Request): Promise<{ userId: string } | Response> {
   try {
-    const userId = await verifyJwtAndGetUserId(req);
-    return { userId };
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user?.id) {
+      logger.warn("Auth failure: no session or user");
+      return httpJsonError(401, "unauthorized", "Not authenticated");
+    }
+    return { userId: session.user.id };
   } catch (e) {
-    if (e instanceof AuthError) return httpJsonError(401, e.code, e.message);
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn("Auth failure: getSession error", msg);
     return httpJsonError(500, "internal_error", "Internal server error");
   }
 }

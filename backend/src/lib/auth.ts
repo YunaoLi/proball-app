@@ -67,9 +67,52 @@ export async function requireAuth(req: Request): Promise<{ userId: string } | Re
   }
 }
 
-/** JWKS URL for JWT verification (same origin as auth). */
-function getJwksUrl(): string {
-  return `${BASE_URL}/api/auth/jwks`;
+/** Normalize base URL (no trailing slash). */
+function getBaseUrl(): string {
+  const base =
+    process.env.BETTER_AUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001");
+  return base.replace(/\/$/, "");
+}
+
+/** JWKS URL for JWT verification. Uses request origin (avoids env mismatch on Vercel). */
+function getJwksUrl(req: Request): string {
+  try {
+    const url = new URL(req.url);
+    return `${url.origin}/api/auth/jwks`;
+  } catch {
+    return `${getBaseUrl()}/api/auth/jwks`;
+  }
+}
+
+/** Cached JWKS (avoids repeated fetch / self-request issues on Vercel). */
+let cachedJwks: { jwks: jose.JSONWebKeySet; url: string } | null = null;
+
+async function getJwks(jwksUrl: string, fallbackUrl?: string): Promise<jose.JSONWebKeySet> {
+  if (cachedJwks?.url === jwksUrl && cachedJwks.jwks.keys?.length) {
+    return cachedJwks.jwks;
+  }
+  if (fallbackUrl && cachedJwks?.url === fallbackUrl && cachedJwks.jwks.keys?.length) {
+    return cachedJwks.jwks;
+  }
+  const tryFetch = async (url: string) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status} ${res.statusText}`);
+    return (await res.json()) as jose.JSONWebKeySet;
+  };
+  try {
+    const jwks = await tryFetch(jwksUrl);
+    cachedJwks = { jwks, url: jwksUrl };
+    return jwks;
+  } catch (e) {
+    if (fallbackUrl && fallbackUrl !== jwksUrl) {
+      logger.warn("JWKS fetch from request origin failed, trying env base URL", String(e));
+      const jwks = await tryFetch(fallbackUrl);
+      cachedJwks = { jwks, url: fallbackUrl };
+      return jwks;
+    }
+    throw e;
+  }
 }
 
 /**
@@ -87,8 +130,10 @@ export async function requireJWT(req: Request): Promise<{ userId: string } | Res
   }
 
   try {
-    const jwksUrl = getJwksUrl();
-    const JWKS = jose.createRemoteJWKSet(new URL(jwksUrl));
+    const jwksUrl = getJwksUrl(req);
+    const fallbackUrl = `${getBaseUrl()}/api/auth/jwks`;
+    const jwks = await getJwks(jwksUrl, fallbackUrl);
+    const JWKS = jose.createLocalJWKSet(jwks);
     const { payload } = await jose.jwtVerify(token, JWKS, {
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,

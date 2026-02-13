@@ -45,11 +45,19 @@ curl -s -X POST "$BASE/api/sessions/$SESSION_ID/end" \
   -d '{"durationSec":600,"calories":18.4,"batteryEnd":84,"metrics":{"steps":321,"rolls":44}}' | jq .
 
 echo ""
-echo "=== 5. List reports ==="
+echo "=== 5. Run job processor (generate AI report) ==="
+echo "Note: Requires JOB_RUNNER_SECRET. For local: x-job-secret: dev-job-secret"
+curl -s -X POST "$BASE/api/internal/jobs/run" \
+  -H "Content-Type: application/json" \
+  -H "x-job-secret: ${JOB_RUNNER_SECRET:-dev-job-secret}" \
+  -d '{"limit":5}' | jq .
+
+echo ""
+echo "=== 6. List reports ==="
 curl -s "$BASE/api/reports" -H "Authorization: Bearer $TOKEN" | jq .
 
 echo ""
-echo "=== 6. Get report by session ==="
+echo "=== 7. Get report by session ==="
 curl -s "$BASE/api/reports/$SESSION_ID" -H "Authorization: Bearer $TOKEN" | jq .
 
 echo ""

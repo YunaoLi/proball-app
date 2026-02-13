@@ -128,13 +128,30 @@ curl -s "$BASE/api/reports/$SESSION_ID" -H "Authorization: Bearer $TOKEN"
 **Success (READY):** `{"sessionId":"...","status":"READY","content":{...},"ok":true}`  
 **Error (404):** `{ "ok": false, "code": "report_not_found", "message": "Report not found" }`
 
+### POST /api/internal/jobs/run – process report jobs (internal)
+
+**No JWT.** Protected by `x-job-secret` header. Used by Vercel Cron or manual trigger to generate AI reports from queued sessions.
+
+```bash
+curl -s -X POST "$BASE/api/internal/jobs/run" \
+  -H "Content-Type: application/json" \
+  -H "x-job-secret: $JOB_RUNNER_SECRET" \
+  -d '{"limit":5,"dryRun":false}'
+```
+
+**Success:** `{"ok":true,"processed":2,"succeeded":2,"failed":0,"details":[{...}]}`  
+**Error (401):** `{ "ok": false, "code": "forbidden", "message": "Invalid or missing x-job-secret" }`
+
+Body defaults: `limit=3`, `dryRun=false`. Limit is capped at 10 (production-safe). Set `JOB_RUNNER_SECRET` in env.
+
 ### Other protected endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/devices` | List paired devices |
+| POST | `/api/internal/jobs/run` | Process report jobs (x-job-secret, no JWT) |
 
-All require `Authorization: Bearer $TOKEN`. Without a valid token: **401** `{ "ok": false, "code": "unauthorized", "message": "..." }`.
+Protected endpoints require `Authorization: Bearer $TOKEN`. Internal jobs use `x-job-secret` instead.
 
 ---
 
@@ -145,9 +162,10 @@ All require `Authorization: Bearer $TOKEN`. Without a valid token: **401** `{ "o
 2. POST /api/auth/token           →  Get accessToken (login)
 3. POST /api/devices/pair         →  Pair device (once per device)
 4. POST /api/sessions/start       →  Start play session
-5. POST /api/sessions/:id/end     →  End session with metrics
-6. GET /api/reports               →  List reports
-7. GET /api/reports/:sessionId    →  Get report detail
+5. POST /api/sessions/:id/end     →  End session with metrics (enqueues report job)
+6. POST /api/internal/jobs/run   →  Process queued jobs → AI report (cron or manual)
+7. GET /api/reports               →  List reports
+8. GET /api/reports/:sessionId    →  Get report detail (content when READY)
 ```
 
 If the token expires (~15 min), call **Step 2** again to get a new token.
@@ -185,9 +203,34 @@ curl -s -X POST "$BASE/api/sessions/SESSION_ID/end" -H "Content-Type: applicatio
   -H "Authorization: Bearer $TOKEN" \
   -d '{"durationSec":600,"calories":18.4}' | jq .
 
+# Process report jobs (requires JOB_RUNNER_SECRET)
+curl -s -X POST "$BASE/api/internal/jobs/run" -H "Content-Type: application/json" \
+  -H "x-job-secret: $JOB_RUNNER_SECRET" -d '{"limit":5}' | jq .
+
 # List reports
 curl -s "$BASE/api/reports" -H "Authorization: Bearer $TOKEN" | jq .
 
 # Get report by session
 curl -s "$BASE/api/reports/SESSION_ID" -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+---
+
+## Report storage (DB)
+
+When a report is generated:
+
+- **`ai_reports`**: `status` → `READY`, `content_json` → full AI output (summaryTitle, summary, highlights, stats, recommendations, generatedAt)
+- **`report_jobs`**: `status` → `DONE` for that session
+
+Example `content_json` shape:
+```json
+{
+  "summaryTitle": "Five-Min Play Spark",
+  "summary": "Nice short burst — a 5-minute session...",
+  "highlights": ["Duration: 300 seconds...", "..."],
+  "stats": { "durationSec": 300, "calories": 9.2, "batteryDelta": -2 },
+  "recommendations": ["Repeat 2–3 short sessions...", "..."],
+  "generatedAt": "2026-02-13T20:43:18Z"
+}
 ```

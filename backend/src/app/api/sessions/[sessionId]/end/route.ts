@@ -82,6 +82,20 @@ export async function POST(req: Request, { params }: Params) {
         } else {
           reportStatus = reportRes.rows[0].status;
         }
+        if (reportStatus === "PENDING") {
+          await client.query(
+            `INSERT INTO report_jobs (session_id, status)
+             VALUES ($1, 'QUEUED')
+             ON CONFLICT (session_id) DO UPDATE SET
+               status = CASE
+                 WHEN report_jobs.status IN ('DONE', 'PROCESSING') THEN report_jobs.status
+                 ELSE 'QUEUED'
+               END,
+               run_at = now(),
+               updated_at = now()`,
+            [sessionId]
+          );
+        }
         return {
           kind: "completed" as const,
           session,
@@ -125,6 +139,19 @@ export async function POST(req: Request, { params }: Params) {
           // Leave READY/FAILED as-is; PENDING stays PENDING
         }
       }
+
+      await client.query(
+        `INSERT INTO report_jobs (session_id, status)
+         VALUES ($1, 'QUEUED')
+         ON CONFLICT (session_id) DO UPDATE SET
+           status = CASE
+             WHEN report_jobs.status IN ('DONE', 'PROCESSING') THEN report_jobs.status
+             ELSE 'QUEUED'
+           END,
+           run_at = now(),
+           updated_at = now()`,
+        [sessionId]
+      );
 
       const updated = await client.query<SessionRow>(
         `SELECT session_id, device_id, status, started_at, ended_at, duration_sec, calories, battery_end FROM play_sessions WHERE session_id = $1 AND user_id = $2`,

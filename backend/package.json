@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:status": "tsx src/db/status.ts"
+    "db:status": "tsx src/db/status.ts",
+    "jobs:worker": "tsx src/jobs/worker.ts"
   },
   "dependencies": {
     "better-auth": "^1.4.0",

@@ -12,6 +12,9 @@
  * - JWT_AUDIENCE       – JWT "aud" claim (default: proball-mobile)
  * - JWT_EXPIRES_IN     – Access token lifetime, e.g. 15m, 1h (default: 15m)
  * - JWT_SIGNING_ALG    – Algorithm for signing (default: RS256; JWKS at GET /api/auth/jwks)
+ *
+ * Jobs:
+ * - JOB_RUNNER_SECRET  – Secret for POST /api/internal/jobs/run (x-job-secret header)
  */
 export const env = {
   BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,

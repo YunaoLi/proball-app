@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proballdev/app/routes.dart';
 import 'package:proballdev/core/widgets/app_scaffold.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/features/activity/activity_view_model.dart';
 import 'package:proballdev/features/activity/widgets/calories_chart.dart';
 import 'package:proballdev/features/activity/widgets/duration_chart.dart';
 import 'package:proballdev/features/activity/widgets/session_list_item.dart';
 import 'package:proballdev/features/current_play_session/current_play_session_page.dart';
 import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/play_session_state.dart';
+import 'package:proballdev/services/session_service.dart';
 
 /// Activity page: recent sessions, calories chart, duration chart.
 /// Uses mock historical data for charts. Dark mode ready.
@@ -17,7 +21,11 @@ class ActivityPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ActivityViewModel(context.read<DeviceService>()),
+      create: (_) => ActivityViewModel(
+        context.read<DeviceService>(),
+        context.read<SessionService>(),
+        playSessionState: context.read<PlaySessionStateNotifier>(),
+      ),
       child: const _ActivityView(),
     );
   }
@@ -65,9 +73,10 @@ class _ActivityView extends StatelessWidget {
                       canRoll: viewModel.canRoll,
                       onStart: () async {
                         try {
-                          await viewModel.startRoll();
-                          if (context.mounted) {
-                            CurrentPlaySessionPage.navigate(context);
+                          final sessionId = await viewModel.startPlayAndGetSessionId();
+                          final deviceId = viewModel.pairedDeviceId;
+                          if (context.mounted && sessionId != null && deviceId != null) {
+                            CurrentPlaySessionPage.navigate(context, sessionId: sessionId, deviceId: deviceId);
                           }
                         } catch (_) {
                           if (context.mounted) {

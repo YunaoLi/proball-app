@@ -81,10 +81,21 @@ export async function POST(req: Request) {
   }
 
   const expiresInSec = expiresInToSeconds(JWT_EXPIRES_IN);
+  const expiresAtMs = Date.now() + expiresInSec * 1000;
+
+  // Extract session token for refresh: "better-auth.session_token=value; ..." -> value
+  let refreshToken: string | undefined;
+  const sessionCookieMatch = setCookie.match(/better-auth\.session_token=([^;]+)/i);
+  if (sessionCookieMatch?.[1]) {
+    refreshToken = sessionCookieMatch[1].trim();
+  }
+
   return jsonSuccess({
     accessToken,
+    refreshToken: refreshToken ?? undefined,
     tokenType: "Bearer",
     expiresInSec,
+    expiresAtMs,
     user: {
       id: user?.id ?? "",
       email: user?.email ?? email,

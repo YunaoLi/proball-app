@@ -1,21 +1,42 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:proballdev/features/map/map_view_model.dart';
+import 'package:proballdev/features/report/report_detail_page.dart';
 import 'package:proballdev/models/map_point.dart';
 import 'package:proballdev/services/device_service.dart';
-import 'package:proballdev/features/map/map_view_model.dart';
+import 'package:proballdev/services/play_session_state.dart';
+import 'package:proballdev/services/report_notifier.dart';
+import 'package:proballdev/services/report_service.dart';
+import 'package:proballdev/services/session_service.dart';
 
 /// View model for the Current Play Session screen.
 /// Shows live session data: timer, calories, distance, path.
-/// UI-agnostic: works with MockDeviceService or BleDeviceService.
+/// On end: sends metrics to backend, navigates to report detail with polling.
 class CurrentPlaySessionViewModel extends ChangeNotifier {
-  CurrentPlaySessionViewModel(this._deviceService) {
+  CurrentPlaySessionViewModel(
+    this._deviceService,
+    this._sessionService,
+    this._reportService, {
+    required this.sessionId,
+    required this.deviceId,
+    PlaySessionStateNotifier? playSessionState,
+    ReportNotifier? reportNotifier,
+  })  : _playSessionState = playSessionState,
+        _reportNotifier = reportNotifier {
     _deviceService.addListener(_onDeviceServiceUpdate);
     _deviceService.positionStream.listen(_onPositionsUpdate);
     if (_deviceService.isRolling) _startTimer();
   }
 
   final DeviceService _deviceService;
+  final SessionService _sessionService;
+  final ReportService _reportService;
+  final PlaySessionStateNotifier? _playSessionState;
+  final ReportNotifier? _reportNotifier;
+  final String sessionId;
+  final String deviceId;
 
   Timer? _timer;
   final ValueNotifier<int> _elapsedNotifier = ValueNotifier<int>(0);
@@ -125,6 +146,38 @@ class CurrentPlaySessionViewModel extends ChangeNotifier {
     _stopTimer();
     await _deviceService.stopRoll();
     notifyListeners();
+  }
+
+  /// End session: send metrics to backend, navigate to report detail, start polling.
+  Future<void> endAndNavigateToReport(BuildContext context) async {
+    _stopTimer();
+    _playSessionState?.setEnding();
+    final elapsed = _elapsedNotifier.value;
+    final calories = liveCalories;
+    final batteryEnd = _deviceService.status.batteryLevel;
+    final metrics = <String, dynamic>{
+      'steps': (elapsed * 0.5).round(),
+      'rolls': (elapsed * 0.1).round(),
+      'distance': liveDistance,
+    };
+    await _deviceService.stopRoll();
+    await _sessionService.endSession(
+      sessionId,
+      endedAt: DateTime.now().toIso8601String(),
+      durationSec: elapsed,
+      calories: calories,
+      batteryEnd: batteryEnd,
+      metrics: metrics,
+    );
+    _playSessionState?.setIdle();
+    _reportNotifier?.refreshReports();
+    if (context.mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => ReportDetailPage(sessionId: sessionId),
+        ),
+      );
+    }
   }
 
   @override

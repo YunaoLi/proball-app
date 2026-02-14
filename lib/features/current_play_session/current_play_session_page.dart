@@ -2,22 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proballdev/core/utils/date_formatter.dart';
 import 'package:proballdev/features/current_play_session/current_play_session_view_model.dart';
+import 'package:proballdev/features/report/report_detail_page.dart';
 import 'package:proballdev/features/map/widgets/indoor_map_widget.dart';
 import 'package:proballdev/models/battery_state.dart';
 import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/play_session_state.dart';
+import 'package:proballdev/services/report_notifier.dart';
+import 'package:proballdev/services/report_service.dart';
+import 'package:proballdev/services/session_service.dart';
 
 /// Live session screen shown when play is active.
 /// Large timer, real-time metrics, path map, Stop Play button.
+/// On End: sends metrics to backend, navigates to report detail.
 class CurrentPlaySessionPage extends StatelessWidget {
-  const CurrentPlaySessionPage({super.key});
+  const CurrentPlaySessionPage({super.key, required this.sessionId, required this.deviceId});
 
-  static Future<void> navigate(BuildContext context) {
+  final String sessionId;
+  final String deviceId;
+
+  static Future<void> navigate(BuildContext context, {required String sessionId, required String deviceId}) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (ctx) => ChangeNotifierProvider(
-          create: (_) =>
-              CurrentPlaySessionViewModel(ctx.read<DeviceService>()),
-          child: const CurrentPlaySessionPage(),
+          create: (_) => CurrentPlaySessionViewModel(
+            ctx.read<DeviceService>(),
+            ctx.read<SessionService>(),
+            ctx.read<ReportService>(),
+            sessionId: sessionId,
+            deviceId: deviceId,
+            playSessionState: ctx.read<PlaySessionStateNotifier>(),
+            reportNotifier: ctx.read<ReportNotifier>(),
+          ),
+          child: CurrentPlaySessionPage(sessionId: sessionId, deviceId: deviceId),
         ),
       ),
     );
@@ -97,7 +113,7 @@ class CurrentPlaySessionPage extends StatelessWidget {
                       FilledButton.icon(
                         onPressed: () async {
                           try {
-                            await viewModel.stopPlay();
+                            await viewModel.endAndNavigateToReport(context);
                             if (context.mounted) Navigator.of(context).pop();
                           } catch (_) {
                             if (context.mounted) {

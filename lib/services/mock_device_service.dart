@@ -9,6 +9,7 @@ import 'package:proballdev/models/map_point.dart';
 import 'package:proballdev/models/pet_mood.dart';
 import 'package:proballdev/models/play_session.dart';
 import 'package:proballdev/models/play_stats.dart';
+import 'package:proballdev/services/api_client.dart';
 import 'package:proballdev/services/device_service.dart';
 import 'package:proballdev/services/error_manager.dart';
 
@@ -17,8 +18,11 @@ import 'package:proballdev/services/error_manager.dart';
 /// pet mood, AI report per session (generated on session complete).
 /// Swap for [BleDeviceService] in app.dart when BLE hardware is ready.
 class MockDeviceService extends DeviceService {
-  MockDeviceService({required ErrorManager errorManager})
-      : _errorManager = errorManager {
+  MockDeviceService({
+    required ErrorManager errorManager,
+    ApiClient? apiClient,
+  })  : _errorManager = errorManager,
+        _apiClient = apiClient {
     _statusController = StreamController<BallStatus>.broadcast();
     _positionController = StreamController<List<MapPoint>>.broadcast();
     _playStatsController = StreamController<List<PlayStats>>.broadcast();
@@ -29,6 +33,7 @@ class MockDeviceService extends DeviceService {
   }
 
   final ErrorManager _errorManager;
+  final ApiClient? _apiClient;
 
   static const int _initialBattery = 85;
   static const Duration _batteryDrainInterval = Duration(seconds: 30);
@@ -93,6 +98,32 @@ class MockDeviceService extends DeviceService {
   List<AiReport> get reports => List.unmodifiable(_reports);
 
   Stream<List<AiReport>> get reportsStream => _aiReportController.stream;
+
+  @override
+  Future<Map<String, dynamic>> pairDevice({
+    required String deviceId,
+    String? deviceName,
+  }) async {
+    if (_apiClient == null) {
+      throw UnimplementedError('ApiClient required for pairDevice');
+    }
+    return _apiClient!.post(
+      'api/devices/pair',
+      body: {
+        'deviceId': deviceId,
+        if (deviceName != null) 'deviceName': deviceName,
+      },
+      auth: true,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> getMe() async {
+    if (_apiClient == null) {
+      throw UnimplementedError('ApiClient required for getMe');
+    }
+    return _apiClient!.get('api/me', auth: true);
+  }
 
   @override
   Future<bool> connect() async {

@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/models/ball_status.dart';
 import 'package:proballdev/models/play_stats.dart';
 import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/play_session_state.dart';
+import 'package:proballdev/services/session_service.dart';
 
 /// Data point for charts (date-based).
 class ChartDataPoint {
@@ -19,18 +23,35 @@ class ChartDataPoint {
 /// View model for the Activity screen.
 /// Provides recent sessions, mock historical data for charts.
 class ActivityViewModel extends ChangeNotifier {
-  ActivityViewModel(this._deviceService) {
+  ActivityViewModel(
+    this._deviceService,
+    this._sessionService, {
+    PlaySessionStateNotifier? playSessionState,
+  })  : _playSessionState = playSessionState {
     _deviceService.addListener(_onDeviceServiceUpdate);
+    _loadPairedDevice();
   }
 
   final DeviceService _deviceService;
+  final SessionService _sessionService;
+  final PlaySessionStateNotifier? _playSessionState;
+
+  String? _pairedDeviceId;
+  String? get pairedDeviceId => _pairedDeviceId;
+
+  Future<void> _loadPairedDevice() async {
+    final prefs = await SharedPreferences.getInstance();
+    _pairedDeviceId = prefs.getString(AppConstants.pairedDeviceIdKey);
+    notifyListeners();
+  }
 
   BallStatus get ballStatus => _deviceService.status;
 
   bool get canRoll =>
       _deviceService.status.isConnected &&
       !_deviceService.isRolling &&
-      _deviceService.batteryState.canStartPlay;
+      _deviceService.batteryState.canStartPlay &&
+      _pairedDeviceId != null;
 
   bool get canStop =>
       _deviceService.status.isConnected && _deviceService.isRolling;
@@ -89,6 +110,27 @@ class ActivityViewModel extends ChangeNotifier {
   Future<void> startRoll() async {
     await _deviceService.startRoll();
     notifyListeners();
+  }
+
+  /// Start session via API, then start local roll. Returns sessionId or null.
+  Future<String?> startPlayAndGetSessionId() async {
+    final deviceId = _pairedDeviceId;
+    if (deviceId == null) return null;
+    final res = await _sessionService.startSession(
+      deviceId,
+      batteryStart: _deviceService.status.batteryLevel,
+    );
+    final sessionId = res['sessionId'] as String?;
+    if (sessionId != null) {
+      await _deviceService.startRoll();
+      _playSessionState?.setActive(
+        sessionId: sessionId,
+        startedAt: DateTime.now(),
+        deviceId: deviceId,
+      );
+    }
+    notifyListeners();
+    return sessionId;
   }
 
   Future<void> stopRoll() async {

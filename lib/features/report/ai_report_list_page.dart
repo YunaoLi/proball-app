@@ -3,23 +3,37 @@ import 'package:provider/provider.dart';
 import 'package:proballdev/app/routes.dart';
 import 'package:proballdev/core/utils/date_formatter.dart';
 import 'package:proballdev/core/widgets/app_scaffold.dart';
-import 'package:proballdev/features/report/ai_report_detail_page.dart';
-import 'package:proballdev/features/report/ai_report_list_view_model.dart';
+import 'package:proballdev/features/report/report_detail_page.dart';
 import 'package:proballdev/models/ai_report.dart';
 import 'package:proballdev/models/pet_mood.dart';
-import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/report_notifier.dart';
 
 /// AI Report list: history of play sessions with intelligent feedback.
-/// Tap a report to view full detail.
-class AiReportListPage extends StatelessWidget {
+/// Polls when any report is PENDING. Tap to view detail.
+class AiReportListPage extends StatefulWidget {
   const AiReportListPage({super.key});
 
   @override
+  State<AiReportListPage> createState() => _AiReportListPageState();
+}
+
+class _AiReportListPageState extends State<AiReportListPage> {
+  bool _initialRefreshDone = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialRefreshDone) {
+      _initialRefreshDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.read<ReportNotifier>().refreshReports();
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AiReportListViewModel(context.read<DeviceService>()),
-      child: const _AiReportListView(),
-    );
+    return const _AiReportListView();
   }
 }
 
@@ -28,9 +42,9 @@ class _AiReportListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = context.watch<AiReportListViewModel>();
+    final notifier = context.watch<ReportNotifier>();
     final theme = Theme.of(context);
-    final reports = viewModel.reports;
+    final reports = notifier.reports;
 
     return AppScaffold(
       currentRoute: AppRoutes.reports,
@@ -117,7 +131,7 @@ class _AiReportListView extends StatelessWidget {
                 ),
               ),
         ],
-        ),
+              ),
       ),
     );
   }
@@ -125,7 +139,7 @@ class _AiReportListView extends StatelessWidget {
   void _openDetail(BuildContext context, AiReport report) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AiReportDetailPage(report: report),
+        builder: (_) => ReportDetailPage(sessionId: report.sessionId),
       ),
     );
   }
@@ -213,6 +227,12 @@ class _ReportListTile extends StatelessWidget {
   }
 
   String _subtitle(AiReport report) {
+    if (report.status == 'PENDING' || report.status == null) {
+      return 'Generating…';
+    }
+    if (report.status == 'FAILED') {
+      return report.failureReason ?? 'Failed';
+    }
     final parts = <String>[];
     if (report.elapsedSeconds != null) {
       parts.add(report.formattedDuration);

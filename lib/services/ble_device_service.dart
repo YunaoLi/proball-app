@@ -79,4 +79,15 @@ class BleDeviceService extends DeviceService {
 
   @override
   List<MapPoint> get lastPositions => const [];
+
+  @override
+  Future<Map<String, dynamic>> pairDevice({
+    required String deviceId,
+    String? deviceName,
+  }) async =>
+      throw UnimplementedError('BleDeviceService: pairDevice when BLE ready');
+
+  @override
+  Future<Map<String, dynamic>> getMe() async =>
+      throw UnimplementedError('BleDeviceService: getMe when BLE ready');
 }

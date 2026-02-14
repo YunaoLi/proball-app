@@ -61,4 +61,13 @@ abstract class DeviceService extends ChangeNotifier {
 
   /// Battery state derived from status. For UI and guards.
   BatteryState get batteryState => status.batteryState;
+
+  /// Pair device with backend. Requires auth. Returns { ok, deviceId, nickname? }.
+  Future<Map<String, dynamic>> pairDevice({
+    required String deviceId,
+    String? deviceName,
+  });
+
+  /// Get current user from backend. Returns { ok, userId, email?, name? }.
+  Future<Map<String, dynamic>> getMe();
 }

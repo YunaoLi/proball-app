@@ -45,7 +45,11 @@ export async function claimNextJobs(
   );
 
   const rows = res.rows;
-  if (rows.length === 0) return [];
+  if (rows.length === 0) {
+    logger.info("reportWorker: no QUEUED jobs found");
+    return [];
+  }
+  logger.info("reportWorker: claiming jobs", { count: rows.length, jobIds: rows.map((r) => r.job_id) });
 
   const jobIds = rows.map((r) => r.job_id);
   await client.query(

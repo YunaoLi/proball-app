@@ -3,6 +3,8 @@
 class AppRoutes {
   AppRoutes._();
 
+  static const String auth = '/auth';
+  static const String pair = '/pair';
   static const String dashboard = '/';
   static const String activity = '/activity';
   static const String map = '/map';
@@ -10,6 +12,8 @@ class AppRoutes {
   static const String settings = '/settings';
 
   static const Map<String, String> routeNames = {
+    auth: 'Auth',
+    pair: 'Pair Device',
     dashboard: 'Dashboard',
     activity: 'Activity',
     map: 'Map',

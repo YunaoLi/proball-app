@@ -10,6 +10,7 @@ type ReportRow = {
   session_id: string;
   status: string;
   content_json: Record<string, unknown> | null;
+  failure_reason: string | null;
 };
 
 export async function GET(req: Request, { params }: Params) {
@@ -23,7 +24,7 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const res = await query<ReportRow>(
-    `SELECT session_id, status, content_json FROM ai_reports WHERE session_id = $1 AND user_id = $2`,
+    `SELECT session_id, status, content_json, failure_reason FROM ai_reports WHERE session_id = $1 AND user_id = $2`,
     [sessionId, userId]
   );
 
@@ -39,5 +40,6 @@ export async function GET(req: Request, { params }: Params) {
     sessionId: row.session_id,
     status: row.status,
     content,
+    failureReason: row.failure_reason ?? undefined,
   });
 }

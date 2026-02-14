@@ -128,30 +128,33 @@ export async function POST(req: Request, { params }: Params) {
         `SELECT status FROM ai_reports WHERE session_id = $1`,
         [sessionId]
       );
+      let reportStatus = "PENDING";
       if (reportRes.rows.length === 0) {
         await client.query(
           `INSERT INTO ai_reports (session_id, user_id, device_id, status, created_at, updated_at) VALUES ($1, $2, $3, 'PENDING', now(), now())`,
           [sessionId, userId, session.device_id]
         );
       } else {
-        const current = reportRes.rows[0].status;
-        if (current !== "PENDING" && current !== "READY" && current !== "FAILED") {
-          // Leave READY/FAILED as-is; PENDING stays PENDING
-        }
+        reportStatus = reportRes.rows[0].status;
       }
 
-      await client.query(
-        `INSERT INTO report_jobs (session_id, status)
-         VALUES ($1, 'QUEUED')
-         ON CONFLICT (session_id) DO UPDATE SET
-           status = CASE
-             WHEN report_jobs.status IN ('DONE', 'PROCESSING') THEN report_jobs.status
-             ELSE 'QUEUED'
-           END,
-           run_at = now(),
-           updated_at = now()`,
-        [sessionId]
-      );
+      if (reportStatus !== "READY" && reportStatus !== "FAILED") {
+        const jobRes = await client.query<{ job_id: string }>(
+          `INSERT INTO report_jobs (session_id, status)
+           VALUES ($1, 'QUEUED')
+           ON CONFLICT (session_id) DO UPDATE SET
+             status = CASE
+               WHEN report_jobs.status IN ('DONE', 'PROCESSING') THEN report_jobs.status
+               ELSE 'QUEUED'
+             END,
+             run_at = now(),
+             updated_at = now()
+           RETURNING job_id`,
+          [sessionId]
+        );
+        const jobId = jobRes.rows[0]?.job_id;
+        logger.info("sessions/end: enqueued report job", { sessionId, jobId });
+      }
 
       const updated = await client.query<SessionRow>(
         `SELECT session_id, device_id, status, started_at, ended_at, duration_sec, calories, battery_end FROM play_sessions WHERE session_id = $1 AND user_id = $2`,

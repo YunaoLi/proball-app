@@ -7,17 +7,38 @@ type RunBody = {
   dryRun?: boolean;
 };
 
-export async function POST(req: Request) {
-  const secret = req.headers.get("x-job-secret");
+function validateJobSecret(req: Request): Response | null {
   const jobSecret = process.env.JOB_RUNNER_SECRET;
-
+  const cronSecret = process.env.CRON_SECRET;
   if (!jobSecret || jobSecret.trim() === "") {
     logger.error("jobs/run: JOB_RUNNER_SECRET is not configured");
     return jsonError(500, "config_error", "JOB_RUNNER_SECRET is not configured");
   }
-  if (!secret || secret !== jobSecret) {
-    return jsonError(401, "forbidden", "Invalid or missing x-job-secret");
+  const headerSecret = req.headers.get("x-job-secret");
+  const authHeader = req.headers.get("authorization");
+  const bearerSecret = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7).trim()
+    : null;
+  const secret = headerSecret ?? bearerSecret;
+  const valid =
+    secret &&
+    (secret === jobSecret || (cronSecret && secret === cronSecret));
+  if (!valid) {
+    return jsonError(401, "forbidden", "Invalid or missing x-job-secret or Authorization");
   }
+  return null;
+}
+
+/** GET: for Vercel Cron (sends GET). Validates via Authorization: Bearer <JOB_RUNNER_SECRET>. */
+export async function GET(req: Request) {
+  const err = validateJobSecret(req);
+  if (err) return err;
+  return runJobs(req, { limit: 10, dryRun: false });
+}
+
+export async function POST(req: Request) {
+  const err = validateJobSecret(req);
+  if (err) return err;
 
   let body: RunBody = {};
   try {
@@ -29,13 +50,21 @@ export async function POST(req: Request) {
       }
     }
   } catch {
-    // Empty or invalid body: use defaults (limit=3, dryRun=false)
+    // Empty or invalid body: use defaults
   }
 
   const limit =
-    typeof body.limit === "number" && body.limit > 0 ? Math.min(body.limit, 10) : 3;
+    typeof body.limit === "number" && body.limit > 0 ? Math.min(body.limit, 10) : 10;
   const dryRun = body.dryRun === true;
 
+  return runJobs(req, { limit, dryRun });
+}
+
+async function runJobs(
+  _req: Request,
+  opts: { limit: number; dryRun: boolean }
+): Promise<Response> {
+  const { limit, dryRun } = opts;
   try {
     const result = await processReportJobs({
       limit,
@@ -47,6 +76,7 @@ export async function POST(req: Request) {
       processed: result.processed,
       succeeded: result.succeeded,
       failed: result.failed,
+      jobCount: result.details.length,
       dryRun,
     });
 

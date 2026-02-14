@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/app/routes.dart';
 import 'package:proballdev/core/widgets/app_scaffold.dart';
 import 'package:proballdev/features/current_play_session/current_play_session_page.dart';
@@ -8,6 +10,7 @@ import 'package:proballdev/features/dashboard/widgets/device_status_card.dart';
 import 'package:proballdev/features/dashboard/widgets/pet_mood_indicator.dart';
 import 'package:proballdev/features/dashboard/widgets/play_stats_card.dart';
 import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/session_service.dart';
 
 /// Dashboard (home) screen: device status, play stats, pet mood, CTA.
 /// Modern, clean, rounded cards. Soft shadows. Apple-like spacing. Dark mode ready.
@@ -17,7 +20,10 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => DashboardViewModel(context.read<DeviceService>()),
+      create: (_) => DashboardViewModel(
+        context.read<DeviceService>(),
+        context.read<SessionService>(),
+      ),
       child: const _DashboardView(),
     );
   }
@@ -77,15 +83,25 @@ class _DashboardView extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     PetMoodIndicator(mood: viewModel.currentPetMood),
+                    if (viewModel.pairedDeviceId != null) ...[
+                      Text(
+                        'Paired: ${viewModel.pairedDeviceId}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     const SizedBox(height: 32),
                     _PlayCtaButton(
                       canStart: viewModel.canStartPlay,
                       batteryDead: viewModel.batteryDead,
                       onStart: () async {
                         try {
-                          await viewModel.startPlay();
-                          if (context.mounted) {
-                            CurrentPlaySessionPage.navigate(context);
+                          final sessionId = await viewModel.startPlayAndGetSessionId();
+                          final deviceId = viewModel.pairedDeviceId;
+                          if (context.mounted && sessionId != null && deviceId != null) {
+                            CurrentPlaySessionPage.navigate(context, sessionId: sessionId, deviceId: deviceId);
                           }
                         } catch (_) {
                           // ErrorManager handles user-visible errors

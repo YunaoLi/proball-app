@@ -4,8 +4,13 @@
 
 ### POST /api/internal/jobs/run
 - [x] Protected by `JOB_RUNNER_SECRET` (401 if missing/wrong)
-- [x] Limit cap: max 10 jobs per request (default 3)
+- [x] GET also supported for Vercel Cron (validates `x-job-secret` or `Authorization: Bearer` with `JOB_RUNNER_SECRET` or `CRON_SECRET`)
+- [x] Limit cap: max 10 jobs per request (default 10)
 - [x] `dryRun` option for debugging
+
+### Vercel Cron (report jobs)
+- `vercel.json` schedules `GET /api/internal/jobs/run` every 2 minutes
+- Set `CRON_SECRET` in Vercel env (same value as `JOB_RUNNER_SECRET` recommended) so cron requests are authorized
 
 ## Authorization
 

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:proballdev/models/ai_report.dart';
+import 'package:proballdev/models/discovered_device.dart';
+import 'package:proballdev/models/paired_device.dart';
 import 'package:proballdev/models/ball_status.dart';
 import 'package:proballdev/models/battery_state.dart';
 import 'package:proballdev/models/map_point.dart';
@@ -61,6 +63,18 @@ abstract class DeviceService extends ChangeNotifier {
 
   /// Battery state derived from status. For UI and guards.
   BatteryState get batteryState => status.batteryState;
+
+  /// Start BLE scan (or mock scan). Discovered devices appear on [discoveredStream].
+  Future<void> startScan();
+
+  /// Stop BLE scan.
+  Future<void> stopScan();
+
+  /// Stream of devices discovered via scan. NOT from DB — nearby devices only.
+  Stream<List<DiscoveredDevice>> get discoveredStream;
+
+  /// List devices paired to current user (from DB). Source of truth for "My Devices".
+  Future<List<PairedDevice>> fetchMyDevices();
 
   /// Pair device with backend. Requires auth. Returns { ok, deviceId, nickname? }.
   Future<Map<String, dynamic>> pairDevice({

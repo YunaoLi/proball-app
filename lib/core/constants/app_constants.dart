@@ -15,6 +15,9 @@ class AppConstants {
   static const String userNameStorageKey = 'auth_user_name';
   static const String pairedDeviceIdKey = 'paired_device_id';
 
+  /// When true, mock BLE scan emits 0–2 nearby devices. When false, scan is empty.
+  static const bool mockHasNearbyDevices = true;
+
   /// FlutterSecureStorage keys for auth persistence.
   static const String secureAccessTokenKey = 'auth_access_token';
   static const String secureRefreshTokenKey = 'auth_refresh_token';

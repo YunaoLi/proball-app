@@ -1,5 +1,7 @@
 import 'package:proballdev/models/ai_report.dart';
 import 'package:proballdev/models/ball_status.dart';
+import 'package:proballdev/models/discovered_device.dart';
+import 'package:proballdev/models/paired_device.dart';
 import 'package:proballdev/models/map_point.dart';
 import 'package:proballdev/models/pet_mood.dart';
 import 'package:proballdev/models/play_session.dart';
@@ -79,6 +81,21 @@ class BleDeviceService extends DeviceService {
 
   @override
   List<MapPoint> get lastPositions => const [];
+
+  @override
+  Future<List<PairedDevice>> fetchMyDevices() async =>
+      throw UnimplementedError('BleDeviceService: fetchMyDevices when BLE ready');
+
+  @override
+  Future<void> startScan() async {
+    // TODO: BLE scan via flutter_blue_plus or similar
+  }
+
+  @override
+  Future<void> stopScan() async {}
+
+  @override
+  Stream<List<DiscoveredDevice>> get discoveredStream => Stream.value([]);
 
   @override
   Future<Map<String, dynamic>> pairDevice({

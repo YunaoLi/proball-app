@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proballdev/core/utils/date_formatter.dart';
+import 'package:proballdev/core/utils/logout_helper.dart';
 import 'package:proballdev/features/current_play_session/current_play_session_view_model.dart';
-import 'package:proballdev/features/report/report_detail_page.dart';
 import 'package:proballdev/features/map/widgets/indoor_map_widget.dart';
 import 'package:proballdev/models/battery_state.dart';
 import 'package:proballdev/services/device_service.dart';
@@ -46,6 +46,29 @@ class CurrentPlaySessionPage extends StatelessWidget {
     return PopScope(
       canPop: false,
       child: Scaffold(
+        appBar: AppBar(
+          leading: const SizedBox.shrink(),
+          actions: [
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value == 'logout') performLogout(context);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout, size: 20),
+                      SizedBox(width: 12),
+                      Text('Logout'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         body: SafeArea(
           child: CustomScrollView(
             slivers: [

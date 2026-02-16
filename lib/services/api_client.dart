@@ -39,6 +39,7 @@ class ApiClient {
 
   final String _baseUrl;
   bool _refreshAttempted = false;
+  DateTime? _lastAuthFailure;
 
   String _url(String path) {
     final p = path.startsWith('/') ? path.substring(1) : path;
@@ -46,7 +47,12 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> get(String path, {bool auth = false}) async {
-    return _executeWithRetry(() => _doGet(path, auth: auth), auth);
+    final tokenUsed = auth ? tokenProvider() : null;
+    return _executeWithRetry(
+      (tokenOverride) => _doGet(path, auth: auth, tokenOverride: tokenOverride),
+      auth,
+      tokenUsed: tokenUsed,
+    );
   }
 
   Future<Map<String, dynamic>> post(
@@ -54,28 +60,60 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool auth = false,
   }) async {
-    return _executeWithRetry(() => _doPost(path, body: body, auth: auth), auth);
+    final tokenUsed = auth ? tokenProvider() : null;
+    return _executeWithRetry(
+      (tokenOverride) =>
+          _doPost(path, body: body, auth: auth, tokenOverride: tokenOverride),
+      auth,
+      tokenUsed: tokenUsed,
+    );
   }
 
   Future<Map<String, dynamic>> _executeWithRetry(
-    Future<http.Response> Function() request,
-    bool auth,
-  ) async {
-    var response = await request();
-    if (response.statusCode == 401 && auth && !_refreshAttempted && refreshCallback != null) {
+    Future<http.Response> Function(String? tokenOverride) request,
+    bool auth, {
+    String? tokenUsed,
+  }) async {
+    var response = await request(tokenUsed);
+
+    final hadToken = (tokenUsed != null && tokenUsed.isNotEmpty);
+
+    // If user has no token, they are logged out; do NOT refresh; do NOT trigger reauth loop.
+    if (response.statusCode == 401 && auth && !hadToken) {
+      return _parseJson(response);
+    }
+
+    if (response.statusCode == 401 &&
+        auth &&
+        hadToken &&
+        !_refreshAttempted &&
+        refreshCallback != null) {
       _refreshAttempted = true;
       final refreshed = await refreshCallback!();
       if (refreshed) {
-        response = await request();
+        response = await request(null);
       }
       if (response.statusCode == 401) {
         _refreshAttempted = false;
-        _handleAuthFailure();
+        _handleAuthFailureThrottled();
         return _parseJson(response);
       }
       _refreshAttempted = false;
+    } else if (response.statusCode == 401 && auth && hadToken) {
+      _handleAuthFailureThrottled();
     }
+
     return _parseJson(response);
+  }
+
+  void _handleAuthFailureThrottled() {
+    final now = DateTime.now();
+    if (_lastAuthFailure != null &&
+        now.difference(_lastAuthFailure!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastAuthFailure = now;
+    _handleAuthFailure();
   }
 
   void _handleAuthFailure() {
@@ -87,9 +125,13 @@ class ApiClient {
     }
   }
 
-  Future<http.Response> _doGet(String path, {bool auth = false}) async {
+  Future<http.Response> _doGet(
+    String path, {
+    bool auth = false,
+    String? tokenOverride,
+  }) async {
     final uri = Uri.parse(_url(path));
-    final headers = _headers(auth: auth);
+    final headers = _headers(auth: auth, tokenOverride: tokenOverride);
     return http.get(uri, headers: headers);
   }
 
@@ -97,9 +139,10 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool auth = false,
+    String? tokenOverride,
   }) async {
     final uri = Uri.parse(_url(path));
-    final headers = _headers(auth: auth);
+    final headers = _headers(auth: auth, tokenOverride: tokenOverride);
     return http.post(
       uri,
       headers: headers,
@@ -107,13 +150,13 @@ class ApiClient {
     );
   }
 
-  Map<String, String> _headers({bool auth = false}) {
+  Map<String, String> _headers({bool auth = false, String? tokenOverride}) {
     final h = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
     if (auth) {
-      final token = tokenProvider();
+      final token = tokenOverride ?? tokenProvider();
       if (token != null && token.isNotEmpty) {
         h['Authorization'] = 'Bearer $token';
       }

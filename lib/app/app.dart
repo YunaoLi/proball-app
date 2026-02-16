@@ -69,16 +69,16 @@ class WickedRollingBallApp extends StatelessWidget {
         Provider<ReportService>(
           create: (ctx) => ReportService(ctx.read<ApiClient>()),
         ),
-        ChangeNotifierProvider<ReportNotifier>(
-          create: (ctx) => ReportNotifier(
-            ctx.read<ReportService>(),
-            ctx.read<DeviceService>(),
-          ),
-        ),
         ChangeNotifierProvider<DeviceService>(
           create: (ctx) => MockDeviceService(
             errorManager: ctx.read<ErrorManager>(),
             apiClient: ctx.read<ApiClient>(),
+          ),
+        ),
+        ChangeNotifierProvider<ReportNotifier>(
+          create: (ctx) => ReportNotifier(
+            ctx.read<ReportService>(),
+            ctx.read<DeviceService>(),
           ),
         ),
       ],

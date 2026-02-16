@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:proballdev/core/utils/logout_helper.dart';
 import 'package:proballdev/features/activity/activity_page.dart';
 import 'package:proballdev/features/dashboard/dashboard_page.dart';
 import 'package:proballdev/features/map/map_page.dart';
@@ -33,6 +34,28 @@ class _AppShellState extends State<AppShell> {
       builder: (context, _) {
         final authState = context.read<AuthStateNotifier>();
         return Scaffold(
+          appBar: AppBar(
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) {
+                  if (value == 'logout') performLogout(context);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout, size: 20),
+                        SizedBox(width: 12),
+                        Text('Logout'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           body: Column(
             children: [
               if (authState.apiDegraded)

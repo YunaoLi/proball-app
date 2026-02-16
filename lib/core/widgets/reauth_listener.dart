@@ -8,11 +8,21 @@ class ReauthListener extends StatefulWidget {
 
   final Widget child;
 
+  /// Call before navigating to auth (e.g. from performLogout) to debounce
+  /// subsequent ReauthListener-triggered navigations from in-flight 401s.
+  static void recordReauthNavigation() {
+    _lastReauthNavigation = DateTime.now();
+  }
+
+  static DateTime? _lastReauthNavigation;
+  static const _debounceDuration = Duration(seconds: 2);
+
   @override
   State<ReauthListener> createState() => _ReauthListenerState();
 }
 
 class _ReauthListenerState extends State<ReauthListener> {
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -32,6 +42,12 @@ class _ReauthListenerState extends State<ReauthListener> {
     final state = context.read<AuthStateNotifier>();
     if (state.needsReauth && mounted) {
       state.clearNeedsReauth();
+      final now = DateTime.now();
+      if (ReauthListener._lastReauthNavigation != null &&
+          now.difference(ReauthListener._lastReauthNavigation!) < ReauthListener._debounceDuration) {
+        return;
+      }
+      ReauthListener._lastReauthNavigation = now;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);

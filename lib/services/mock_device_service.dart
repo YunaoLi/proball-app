@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/models/ai_report.dart';
 import 'package:proballdev/models/ball_status.dart';
+import 'package:proballdev/models/discovered_device.dart';
+import 'package:proballdev/models/paired_device.dart';
 import 'package:proballdev/models/battery_state.dart';
 import 'package:proballdev/models/map_point.dart';
 import 'package:proballdev/models/pet_mood.dart';
@@ -28,6 +31,7 @@ class MockDeviceService extends DeviceService {
     _playStatsController = StreamController<List<PlayStats>>.broadcast();
     _petMoodController = StreamController<PetMood>.broadcast();
     _aiReportController = StreamController<List<AiReport>>.broadcast();
+    _discoveredController = StreamController<List<DiscoveredDevice>>.broadcast();
 
     _startBatteryDrainTimer();
   }
@@ -43,6 +47,7 @@ class MockDeviceService extends DeviceService {
     mode: BallMode.normal,
     isConnected: true,
   );
+  bool _enabled = false;
   bool _isRolling = false;
   List<MapPoint> _positions = [];
   DateTime? _sessionStartTime;
@@ -99,15 +104,71 @@ class MockDeviceService extends DeviceService {
 
   Stream<List<AiReport>> get reportsStream => _aiReportController.stream;
 
+  static const _mockDeviceNames = ['Pro Ball Alpha', 'Pro Ball Beta'];
+
+  /// Deterministic UUIDs for mock scan — NOT from DB, nearby devices only.
+  static const _mockDiscoveredUuids = [
+    '9baae533-e29b-41d4-a716-446655440001',
+    '9baae533-e29b-41d4-a716-446655440002',
+    '9baae533-e29b-41d4-a716-446655440003',
+  ];
+
+  late final StreamController<List<DiscoveredDevice>> _discoveredController;
+  bool _scanning = false;
+
+  @override
+  Future<void> startScan() async {
+    if (_scanning) return;
+    _scanning = true;
+    _discoveredController.add([]);
+    Future<void>.delayed(const Duration(milliseconds: 1200)).then((_) {
+      if (!_scanning) return;
+      if (!AppConstants.mockHasNearbyDevices) {
+        _discoveredController.add([]);
+        return;
+      }
+      final count = 1 + (DateTime.now().millisecondsSinceEpoch % 3);
+      final devices = List<DiscoveredDevice>.generate(
+        count,
+        (i) => DiscoveredDevice(
+          deviceId: _mockDiscoveredUuids[i],
+          name: _mockDeviceNames[i % _mockDeviceNames.length],
+        ),
+      );
+      _discoveredController.add(devices);
+    });
+  }
+
+  @override
+  Future<void> stopScan() async {
+    _scanning = false;
+  }
+
+  @override
+  Stream<List<DiscoveredDevice>> get discoveredStream =>
+      _discoveredController.stream;
+
+  @override
+  Future<List<PairedDevice>> fetchMyDevices() async {
+    final client = _apiClient;
+    if (client == null) {
+      throw UnimplementedError('ApiClient required for fetchMyDevices');
+    }
+    final res = await client.get('api/devices', auth: true);
+    final list = res['devices'];
+    return PairedDevice.fromList(list);
+  }
+
   @override
   Future<Map<String, dynamic>> pairDevice({
     required String deviceId,
     String? deviceName,
   }) async {
-    if (_apiClient == null) {
+    final client = _apiClient;
+    if (client == null) {
       throw UnimplementedError('ApiClient required for pairDevice');
     }
-    return _apiClient!.post(
+    return client.post(
       'api/devices/pair',
       body: {
         'deviceId': deviceId,
@@ -119,15 +180,17 @@ class MockDeviceService extends DeviceService {
 
   @override
   Future<Map<String, dynamic>> getMe() async {
-    if (_apiClient == null) {
+    final client = _apiClient;
+    if (client == null) {
       throw UnimplementedError('ApiClient required for getMe');
     }
-    return _apiClient!.get('api/me', auth: true);
+    return client.get('api/me', auth: true);
   }
 
   @override
   Future<bool> connect() async {
     await Future<void>.delayed(const Duration(milliseconds: 500));
+    _enabled = true;
     _status = BallStatus(
       batteryLevel: _status.batteryLevel > 0 ? _status.batteryLevel : _initialBattery,
       mode: BallMode.normal,
@@ -140,6 +203,7 @@ class MockDeviceService extends DeviceService {
 
   @override
   Future<void> disconnect() async {
+    _enabled = false;
     _status = BallStatus.disconnected;
     _statusController.add(_status);
     notifyListeners();
@@ -249,7 +313,7 @@ class MockDeviceService extends DeviceService {
   void _startBatteryDrainTimer() {
     _batteryTimer?.cancel();
     _batteryTimer = Timer.periodic(_batteryDrainInterval, (_) {
-      if (!_status.isConnected) return;
+      if (!_enabled || !_status.isConnected) return;
 
       final drain = _isRolling ? 2 : 1;
       final newLevel = (_status.batteryLevel - drain).clamp(0, 100);
@@ -361,11 +425,13 @@ class MockDeviceService extends DeviceService {
   @override
   void dispose() {
     _batteryTimer?.cancel();
+    _scanning = false;
     _statusController.close();
     _positionController.close();
     _playStatsController.close();
     _petMoodController.close();
     _aiReportController.close();
+    _discoveredController.close();
     super.dispose();
   }
 }

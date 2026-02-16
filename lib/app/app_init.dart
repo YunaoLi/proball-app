@@ -16,6 +16,14 @@ class AppInit extends StatefulWidget {
 }
 
 class _AppInitState extends State<AppInit> {
+  late final Future<String> _routeFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _routeFuture = _resolveRoute();
+  }
+
   Future<String> _resolveRoute() async {
     final auth = context.read<AuthService>();
     await auth.loadFromStorage();
@@ -29,7 +37,7 @@ class _AppInitState extends State<AppInit> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<String>(
-      future: _resolveRoute(),
+      future: _routeFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:proballdev/app/routes.dart';
 import 'package:proballdev/core/constants/app_constants.dart';
+import 'package:proballdev/core/utils/logout_helper.dart';
 import 'package:proballdev/core/widgets/app_scaffold.dart';
-import 'package:proballdev/features/auth/auth_page.dart';
 import 'package:proballdev/models/ball_status.dart';
-import 'package:proballdev/services/auth_service.dart';
 import 'package:proballdev/services/device_service.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -74,17 +72,7 @@ class SettingsPage extends StatelessWidget {
                 child: ListTile(
                   leading: Icon(Icons.logout, color: theme.colorScheme.error),
                   title: Text('Logout', style: TextStyle(color: theme.colorScheme.error)),
-                  onTap: () async {
-                    await context.read<AuthService>().logout();
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove(AppConstants.pairedDeviceIdKey);
-                    if (context.mounted) {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const AuthPage()),
-                        (_) => false,
-                      );
-                    }
-                  },
+                  onTap: () => performLogout(context),
                 ),
               ),
               const SizedBox(height: 24),

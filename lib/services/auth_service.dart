@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/models/app_error.dart';
@@ -158,5 +160,60 @@ class AuthService {
   Future<void> logout() async {
     await _authStorage.clear();
     await _tokenStore.clear();
+  }
+
+  /// Sign in with Google via OAuth webview.
+  /// Opens OAuth flow, on success stores JWT and user info.
+  Future<void> signInWithGoogle() async {
+    final base = _baseUrl.replaceAll(RegExp(r'/$'), '');
+    final signInUrl = '$base/oauth/start-google';
+
+    String result;
+    try {
+      result = await FlutterWebAuth2.authenticate(
+        url: signInUrl,
+        callbackUrlScheme: 'proball',
+      );
+    } on PlatformException catch (e) {
+      if (e.code == 'CANCELED') {
+        throw AppError(
+          type: AppErrorType.unknown,
+          severity: AppErrorSeverity.normal,
+          userMessage: 'Sign in was cancelled.',
+        );
+      }
+      rethrow;
+    }
+
+    final uri = Uri.parse(result);
+    final accessToken = uri.queryParameters['accessToken'];
+    if (accessToken == null || accessToken.isEmpty) {
+      throw AppError(
+        type: AppErrorType.unknown,
+        severity: AppErrorSeverity.critical,
+        userMessage: 'Sign in was cancelled or failed.',
+      );
+    }
+
+    final refreshToken = uri.queryParameters['refreshToken'];
+    final expiresAtMs = int.tryParse(uri.queryParameters['expiresAtMs'] ?? '');
+    final userId = uri.queryParameters['userId'];
+    final userEmail = uri.queryParameters['email'];
+    final userName = uri.queryParameters['name'];
+
+    await _authStorage.save(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAtMs: expiresAtMs,
+      userId: userId,
+      email: userEmail,
+      name: userName,
+    );
+    await _tokenStore.save(
+      accessToken: accessToken,
+      userId: userId,
+      email: userEmail,
+      name: userName,
+    );
   }
 }

@@ -27,6 +27,34 @@ class _AuthPageState extends State<AuthPage> {
     super.dispose();
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      final auth = context.read<AuthService>();
+      await auth.signInWithGoogle();
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
+    } on AppError catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.userMessage;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Something went wrong. Please try again.';
+          _loading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _submit() async {
     setState(() {
       _loading = true;
@@ -149,6 +177,15 @@ class _AuthPageState extends State<AuthPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Text(_isLogin ? 'Sign In' : 'Sign Up'),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : _signInWithGoogle,
+                icon: const Icon(Icons.g_mobiledata, size: 24),
+                label: const Text('Continue with Google'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
               ),
               const SizedBox(height: 16),
               TextButton(

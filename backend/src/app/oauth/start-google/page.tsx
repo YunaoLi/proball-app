@@ -1,24 +1,59 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Auto-submits a form to Better Auth sign-in/social (POST).
- * Flutter opens this URL in webview; form POST redirects to Google OAuth.
+ * POSTs JSON to Better Auth sign-in/social, then redirects to Google OAuth.
+ * Better Auth requires Content-Type: application/json (form-urlencoded is rejected).
  */
 export default function OAuthStartGooglePage() {
-  const formRef = useRef<HTMLFormElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    formRef.current?.requestSubmit();
-  }, []);
+    let cancelled = false;
 
-  const baseUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}`
-      : process.env.NEXT_PUBLIC_APP_BASE_URL ?? "https://proball-app.vercel.app";
-  const callbackUrl = `${baseUrl}/oauth/success`;
-  const actionUrl = `${baseUrl}/api/auth/sign-in/social`;
+    async function startOAuth() {
+      const baseUrl =
+        typeof window !== "undefined"
+          ? window.location.origin
+          : "https://proball-app.vercel.app";
+      const callbackUrl = `${baseUrl}/oauth/success`;
+      const actionUrl = `${baseUrl}/api/auth/sign-in/social`;
+
+      try {
+        const res = await fetch(actionUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "google", callbackURL: callbackUrl }),
+          credentials: "include",
+          redirect: "manual",
+        });
+
+        if (cancelled) return;
+
+        const location = res.headers.get("Location");
+        if (res.status >= 300 && res.status < 400 && location) {
+          window.location.href = location;
+          return;
+        }
+        const data = (await res.json().catch(() => ({}))) as { url?: string };
+        if (data?.url) {
+          window.location.href = data.url;
+          return;
+        }
+        setError(`Sign-in failed (${res.status})`);
+      } catch (e) {
+        if (!cancelled) {
+          setError("Something went wrong. Please try again.");
+        }
+      }
+    }
+
+    startOAuth();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div
@@ -32,16 +67,11 @@ export default function OAuthStartGooglePage() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      <p>Redirecting to Google...</p>
-      <form
-        ref={formRef}
-        method="POST"
-        action={actionUrl}
-        style={{ display: "none" }}
-      >
-        <input type="hidden" name="provider" value="google" />
-        <input type="hidden" name="callbackURL" value={callbackUrl} />
-      </form>
+      {error ? (
+        <p style={{ color: "#c00" }}>{error}</p>
+      ) : (
+        <p>Redirecting to Google...</p>
+      )}
     </div>
   );
 }

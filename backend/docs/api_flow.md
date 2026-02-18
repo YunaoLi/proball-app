@@ -25,11 +25,11 @@ curl -s -X POST "$BASE/api/auth/sign-up/email" \
 
 ---
 
-## Step 2: Obtain a JWT access token
+## Step 2: Obtain access + refresh tokens (login)
 
 **POST** `/api/auth/token`
 
-Exchanges email + password for a JWT. Call this **after sign-up** (or when the token expires). This is the "activation" step for all protected APIs.
+Exchanges email + password for an access token (JWT) and a refresh token. Call this **after sign-up** (or when the refresh token is invalid). This is the "activation" step for all protected APIs.
 
 ```bash
 curl -s -X POST "$BASE/api/auth/token" \
@@ -42,21 +42,70 @@ curl -s -X POST "$BASE/api/auth/token" \
 {
   "ok": true,
   "accessToken": "eyJ...",
+  "refreshToken": "...",
   "tokenType": "Bearer",
   "expiresInSec": 900,
+  "expiresAtMs": 1739456789000,
   "user": { "id": "...", "email": "you@example.com", "name": "Your Name" }
 }
 ```
 
 **Error (401):** `{ "ok": false, "code": "invalid_credentials", "message": "Invalid email or password" }`
 
-Save the `accessToken` for the next steps:
+Save both tokens. Use `accessToken` for API calls; store `refreshToken` securely (e.g. secure storage) for refresh when the access token expires.
 
 ```bash
-TOKEN=$(curl -s -X POST "$BASE/api/auth/token" \
+LOGIN_RESP=$(curl -s -X POST "$BASE/api/auth/token" \
   -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"your-password"}' | jq -r '.accessToken')
+  -d '{"email":"you@example.com","password":"your-password"}')
+TOKEN=$(echo "$LOGIN_RESP" | jq -r '.accessToken')
+REFRESH=$(echo "$LOGIN_RESP" | jq -r '.refreshToken')
 ```
+
+---
+
+## Step 2b: Refresh tokens (when access token expires)
+
+**POST** `/api/auth/refresh`
+
+Exchanges the refresh token for new access + refresh tokens. Use this instead of re-login when the access token expires (~15 min).
+
+```bash
+curl -s -X POST "$BASE/api/auth/refresh" \
+  -H "Content-Type: application/json" \
+  -d "{\"refreshToken\":\"$REFRESH\"}"
+```
+
+Or with `Authorization: Bearer <refreshToken>`:
+
+```bash
+curl -s -X POST "$BASE/api/auth/refresh" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $REFRESH" \
+  -d "{\"refreshToken\":\"$REFRESH\"}"
+```
+
+**Success (200):** `{ "ok": true, "accessToken": "...", "refreshToken": "...", "expiresInSec": 900 }`  
+**Error (401):** `{ "error": "REFRESH_INVALID" }` (token expired, revoked, or reused → re-login)
+
+Update the stored tokens with the new values. Refresh tokens rotate on each use.
+
+---
+
+## Step 2c: Logout (revoke refresh token)
+
+**POST** `/api/auth/logout`
+
+Revokes the refresh token on the server. Call before clearing local tokens.
+
+```bash
+curl -s -X POST "$BASE/api/auth/logout" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $REFRESH" \
+  -d "{\"refreshToken\":\"$REFRESH\"}"
+```
+
+**Success (204):** No content. Then clear local tokens.
 
 ---
 
@@ -159,16 +208,18 @@ Protected endpoints require `Authorization: Bearer $TOKEN`. Internal jobs use `x
 
 ```
 1. POST /api/auth/sign-up/email   →  Create account (once)
-2. POST /api/auth/token           →  Get accessToken (login)
+2. POST /api/auth/token           →  Get accessToken + refreshToken (login)
+2b. POST /api/auth/refresh        →  Get new access + refresh (when access expires)
+2c. POST /api/auth/logout         →  Revoke refresh token (on logout)
 3. POST /api/devices/pair         →  Pair device (once per device)
 4. POST /api/sessions/start       →  Start play session
 5. POST /api/sessions/:id/end     →  End session with metrics (enqueues report job)
 6. POST /api/internal/jobs/run   →  Process queued jobs → AI report (cron or manual)
 7. GET /api/reports               →  List reports
-8. GET /api/reports/:sessionId    →  Get report detail (content when READY)
+8. GET /api/reports/:sessionId   →  Get report detail (content when READY)
 ```
 
-If the token expires (~15 min), call **Step 2** again to get a new token.
+If the access token expires (~15 min), call **Step 2b** (refresh) to get new tokens. If refresh fails, call **Step 2** (login) again.
 
 ---
 
@@ -189,9 +240,11 @@ BASE=https://proball-app.vercel.app EMAIL=your@email.com PASSWORD=your-password 
 Or run individual curls (set `BASE`, `TOKEN`, and `SESSION_ID` first):
 
 ```bash
-# Get token
-TOKEN=$(curl -s -X POST "$BASE/api/auth/token" -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"your-password"}' | jq -r '.accessToken')
+# Get access + refresh tokens
+LOGIN_RESP=$(curl -s -X POST "$BASE/api/auth/token" -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"your-password"}')
+TOKEN=$(echo "$LOGIN_RESP" | jq -r '.accessToken')
+REFRESH=$(echo "$LOGIN_RESP" | jq -r '.refreshToken')
 
 # Start session (use your paired deviceId)
 curl -s -X POST "$BASE/api/sessions/start" -H "Content-Type: application/json" \

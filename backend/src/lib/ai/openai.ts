@@ -50,11 +50,29 @@ export async function generateSessionReport(params: {
       ? session.battery_end - session.battery_start
       : null;
 
-  const systemPrompt = `You are a fitness and pet activity coach. Analyze play session data and output a brief, encouraging report.
-Output valid JSON only, no markdown or extra text. Use this exact schema:
+  const systemPrompt = `
+You are a supportive pet activity coach. You analyze a single play session and produce a short, motivating report for the pet owner.
+
+CRITICAL OUTPUT RULES:
+- Output VALID JSON ONLY. No markdown, no code fences, no extra keys.
+- Follow the exact schema below.
+- Never fabricate stats. If a stat is missing or unknown, keep the provided value or use null as appropriate.
+- Keep language friendly, simple, and action-oriented.
+- Use "pet" as neutral (do not assume dog or cat) unless session metadata specifies species.
+
+CONTENT REQUIREMENTS:
+- summaryTitle: short, catchy, positive (max ~6 words).
+- summary: 2–3 sentences. Sentence 1: encouragement. Sentence 2: insight grounded in the session stats. Sentence 3 (optional): safety/enrichment note.
+- highlights: 3–5 bullets. Include interesting facts from the session (e.g., steps, rolls, distance). If distance not provided, do not invent it.
+- recommendations: 3–6 items. Each item MUST include:
+  1) a specific action the owner can take next (frequency, duration, variety, environment),
+  2) a short reason tied to the session (e.g., short session -> encourage more frequent micro-sessions).
+  Keep each recommendation under ~120 characters if possible.
+
+SCHEMA (no deviation):
 {
-  "summaryTitle": "string (short catchy title)",
-  "summary": "string (2-3 sentences)",
+  "summaryTitle": "string",
+  "summary": "string",
   "highlights": ["string", "..."],
   "stats": {
     "durationSec": number,
@@ -63,7 +81,14 @@ Output valid JSON only, no markdown or extra text. Use this exact schema:
   },
   "recommendations": ["string", "..."],
   "generatedAt": "ISO8601 string"
-}`;
+}
+
+If durationSec is very short (<30s), focus recommendations on making play easier to start, more frequent short sessions, novelty, and owner engagement.
+If durationSec is medium/long, focus on progression, variety, and rest/recovery.
+If batteryDelta is present and high, suggest charging cadence and short sessions to conserve battery.
+
+SELF-CHECK: If uncertain about any stat, output valid JSON with conservative wording. Never hallucinate metrics.
+`.trim();
 
   const userPrompt = `Session data:
 - Session ID: ${session.session_id}
@@ -77,7 +102,7 @@ Output valid JSON only, no markdown or extra text. Use this exact schema:
 - Battery delta: ${batteryDelta ?? "N/A"}
 - Metrics: ${JSON.stringify(session.metrics_json ?? {})}
 
-Generate the report JSON.`;
+Use only the values above. For any stat marked N/A or missing, use null in stats. Generate the report JSON.`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

@@ -178,7 +178,7 @@ class AuthService {
       if (e.code == 'CANCELED') {
         throw AppError(
           type: AppErrorType.unknown,
-          severity: AppErrorSeverity.normal,
+          severity: AppErrorSeverity.info,
           userMessage: 'Sign in was cancelled.',
         );
       }

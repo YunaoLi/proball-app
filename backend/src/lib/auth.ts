@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { bearer, jwt } from "better-auth/plugins";
 import * as jose from "jose";
-import { getPool } from "./db";
+import { getPool, query } from "./db";
 import { jsonError as httpJsonError } from "./http";
 import { logger } from "./logger";
 
@@ -16,6 +17,7 @@ const BASE_URL =
  * Better Auth instance: sign-up, sign-in, session (cookies), JWT/Bearer for mobile.
  * Mount handler at GET/POST /api/auth/[...all].
  * JWT plugin: issuer, audience, expiresIn; JWKS at GET /api/auth/jwks.
+ * Google OAuth: sign-in at GET /api/auth/sign-in/social?provider=google, callback at /api/auth/callback/google.
  */
 export const auth = betterAuth({
   database: getPool(),
@@ -24,6 +26,34 @@ export const auth = betterAuth({
   baseURL: BASE_URL,
   emailAndPassword: {
     enabled: true,
+  },
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+  },
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path.includes("callback") && ctx.path.includes("google")) {
+        const newSession = ctx.context.newSession;
+        if (newSession?.user?.id) {
+          try {
+            const pool = getPool();
+            await pool.query(
+              `UPDATE "user" SET "emailVerified" = true, "updatedAt" = now() WHERE id = $1`,
+              [newSession.user.id]
+            );
+            logger.info("auth: marked Google user as verified", {
+              userId: newSession.user.id.slice(0, 8) + "***",
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error("auth: failed to mark Google user verified", msg);
+          }
+        }
+      }
+    }),
   },
   plugins: [
     jwt({
@@ -149,6 +179,34 @@ export async function requireJWT(req: Request): Promise<{ userId: string } | Res
     const msg = e instanceof Error ? e.message : String(e);
     logger.warn("Auth failure: JWT verify error", msg);
     return httpJsonError(401, "unauthorized", "Invalid or expired token");
+  }
+}
+
+/**
+ * Like requireJWT, but also enforces emailVerified. Use for protected API routes.
+ * Returns 403 email_not_verified if user exists but emailVerified is false.
+ */
+export async function requireVerifiedJWT(req: Request): Promise<{ userId: string } | Response> {
+  const authed = await requireJWT(req);
+  if (authed instanceof Response) return authed;
+  const { userId } = authed;
+
+  try {
+    const res = await query<{ emailVerified: boolean }>(
+      `SELECT "emailVerified" FROM "user" WHERE id = $1`,
+      [userId]
+    );
+    if (res.rows.length === 0) {
+      return httpJsonError(401, "unauthorized", "User not found");
+    }
+    if (res.rows[0].emailVerified === false) {
+      return httpJsonError(403, "email_not_verified", "Please verify your email.");
+    }
+    return { userId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn("Auth failure: email verification check error", msg);
+    return httpJsonError(500, "internal_error", "Internal server error");
   }
 }
 

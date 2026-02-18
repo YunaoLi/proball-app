@@ -1,4 +1,4 @@
-import { requireJWT, jsonError } from "@/lib/auth";
+import { requireVerifiedJWT, jsonError } from "@/lib/auth";
 import { withTransaction } from "@/lib/db";
 import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
@@ -26,7 +26,7 @@ type SessionRow = {
 };
 
 export async function POST(req: Request, { params }: Params) {
-  const authed = await requireJWT(req);
+  const authed = await requireVerifiedJWT(req);
   if (authed instanceof Response) return authed;
   const { userId } = authed;
   const { sessionId } = await params;

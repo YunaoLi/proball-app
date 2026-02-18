@@ -1,4 +1,4 @@
-import { requireJWT, jsonError } from "@/lib/auth";
+import { requireVerifiedJWT, jsonError } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
@@ -11,7 +11,7 @@ type StartBody = {
 };
 
 export async function POST(req: Request) {
-  const authed = await requireJWT(req);
+  const authed = await requireVerifiedJWT(req);
   if (authed instanceof Response) return authed;
   const { userId } = authed;
 

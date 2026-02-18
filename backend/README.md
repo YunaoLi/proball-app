@@ -16,6 +16,33 @@ See `src/lib/env.ts` for the full list. Required and optional:
 - `JWT_EXPIRES_IN` – Access token lifetime, e.g. `15m`, `1h` (default: `15m`).
 - `JWT_SIGNING_ALG` – Signing algorithm (default: `RS256`). JWKS at **GET** `/api/auth/jwks`.
 
+### Google OAuth (Sign in with Google)
+
+Google OAuth is supported for mobile and web. Users who sign in with Google are treated as verified (no email verification link required).
+
+**Environment variables:**
+
+- `GOOGLE_CLIENT_ID` – OAuth 2.0 Client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+- `GOOGLE_CLIENT_SECRET` – OAuth 2.0 Client Secret (create a **Web application** client, not a native/mobile client).
+
+**Google Cloud Console – Authorized redirect URIs:**
+
+Add these exact URIs under your OAuth 2.0 Client (Web application):
+
+- Production: `https://proball-app.vercel.app/api/auth/callback/google`
+- Local dev: `http://localhost:3001/api/auth/callback/google`
+
+**Endpoints:**
+
+- `GET /oauth/start-google` – Auto-POSTs to Better Auth; use as entry point for Flutter webview.
+- `GET /oauth/success` – OAuth callback landing page; fetches JWT and redirects to `proball://auth?accessToken=...`.
+- `GET /api/auth/oauth/mobile-complete` – Returns JWT from session cookies (used by success page).
+- `GET /api/auth/sign-in/social` – Better Auth social sign-in (POST with `provider=google`, `callbackURL`).
+
+**Optional:**
+
+- `NEXT_PUBLIC_APP_MOBILE_DEEPLINK` – Mobile redirect scheme (default: `proball://auth`).
+
 For **JWT** flow (mobile): **POST** `/api/auth/token` with `{ email, password }` to get an access token; then send **Authorization: Bearer &lt;token&gt;** on protected routes. See **`docs/jwt_test.md`** for cURL examples.
 
 ### Create auth tables

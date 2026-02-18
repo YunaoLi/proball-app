@@ -1,6 +1,5 @@
-import { requireJWT } from "@/lib/auth";
+import { requireVerifiedJWT, jsonError } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { jsonError } from "@/lib/auth";
 import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
@@ -20,7 +19,7 @@ type DeviceRow = {
 };
 
 export async function GET(req: Request) {
-  const authed = await requireJWT(req);
+  const authed = await requireVerifiedJWT(req);
   if (authed instanceof Response) return authed;
   const { userId } = authed;
 

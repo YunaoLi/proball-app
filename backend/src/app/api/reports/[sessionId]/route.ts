@@ -1,4 +1,4 @@
-import { requireJWT, jsonError } from "@/lib/auth";
+import { requireVerifiedJWT, jsonError } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
@@ -14,7 +14,7 @@ type ReportRow = {
 };
 
 export async function GET(req: Request, { params }: Params) {
-  const authed = await requireJWT(req);
+  const authed = await requireVerifiedJWT(req);
   if (authed instanceof Response) return authed;
   const { userId } = authed;
   const { sessionId } = await params;

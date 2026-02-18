@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { query } from "@/lib/db";
 import { jsonError, jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
 
@@ -43,6 +44,15 @@ export async function POST(req: Request) {
   if (!signInRes.ok) {
     logger.warn("auth/token: sign-in failed", signInRes.status);
     return jsonError(401, "invalid_credentials", "Invalid email or password");
+  }
+
+  const verifiedRes = await query<{ emailVerified: boolean }>(
+    `SELECT "emailVerified" FROM "user" WHERE email = $1`,
+    [email]
+  );
+  if (verifiedRes.rows.length > 0 && verifiedRes.rows[0].emailVerified === false) {
+    logger.info("auth/token: email not verified", { email: email.slice(0, 3) + "***" });
+    return jsonError(403, "email_not_verified", "Please verify your email.");
   }
   const setCookie = signInRes.headers.get("set-cookie");
   if (!setCookie) {

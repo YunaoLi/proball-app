@@ -32,7 +32,9 @@ class BallStatus {
   );
 
   /// Derived battery state for UI and logic.
-  BatteryState get batteryState => BatteryState.fromPercentage(batteryLevel);
+  /// When not connected, returns unknown (no reading).
+  BatteryState get batteryState =>
+      isConnected ? BatteryState.fromPercentage(batteryLevel) : BatteryState.unknown;
 }
 
 /// Ball operating mode.

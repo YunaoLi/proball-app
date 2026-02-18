@@ -47,7 +47,7 @@ class SettingsPage extends StatelessWidget {
                       subtitle: Text(
                         deviceService.status.isConnected
                             ? 'Connected • ${deviceService.status.batteryLevel}% battery • ${deviceService.status.mode.displayName}'
-                            : 'Disconnected',
+                            : 'Not connected',
                       ),
                       trailing: FilledButton(
                         onPressed: () async {

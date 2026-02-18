@@ -4,10 +4,16 @@ class BatteryState {
   const BatteryState({
     required this.percentage,
     required this.status,
-  }) : assert(percentage >= 0 && percentage <= 100, 'percentage must be 0–100');
+  }) : assert(
+          status == BatteryStatus.unknown || (percentage >= 0 && percentage <= 100),
+          'percentage must be 0–100 when not unknown',
+        );
 
-  final int percentage; // 0–100
+  final int percentage; // 0–100 (ignored when status is unknown)
   final BatteryStatus status;
+
+  /// Unknown: no device connected, no reading available.
+  static const unknown = BatteryState(percentage: 0, status: BatteryStatus.unknown);
 
   /// Derives status from percentage.
   /// - normal: ≥ 20%
@@ -26,15 +32,17 @@ class BatteryState {
     return BatteryState(percentage: clamped, status: status);
   }
 
+  bool get isUnknown => status == BatteryStatus.unknown;
   bool get isDead => status == BatteryStatus.dead;
   bool get isCritical => status == BatteryStatus.critical;
   bool get isLow => status == BatteryStatus.low;
   bool get isNormal => status == BatteryStatus.normal;
 
-  bool get canStartPlay => !isDead;
+  bool get canStartPlay => !isDead && !isUnknown;
 }
 
 enum BatteryStatus {
+  unknown,
   normal,
   low,
   critical,
@@ -44,6 +52,8 @@ enum BatteryStatus {
 extension BatteryStatusExtension on BatteryStatus {
   String get displayName {
     switch (this) {
+      case BatteryStatus.unknown:
+        return 'Unknown';
       case BatteryStatus.normal:
         return 'Normal';
       case BatteryStatus.low:

@@ -42,11 +42,7 @@ class MockDeviceService extends DeviceService {
   static const int _initialBattery = 85;
   static const Duration _batteryDrainInterval = Duration(seconds: 30);
 
-  BallStatus _status = const BallStatus(
-    batteryLevel: _initialBattery,
-    mode: BallMode.normal,
-    isConnected: true,
-  );
+  BallStatus _status = BallStatus.disconnected;
   bool _enabled = false;
   bool _isRolling = false;
   List<MapPoint> _positions = [];

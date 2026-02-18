@@ -8,6 +8,7 @@ import 'package:proballdev/core/utils/logout_helper.dart';
 import 'package:proballdev/models/app_error.dart';
 import 'package:proballdev/models/discovered_device.dart';
 import 'package:proballdev/models/paired_device.dart';
+import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/device_service.dart';
 
 /// Pair Device screen. Two sections: My Devices (from API) and Other Devices (from BLE/mock scan).
@@ -73,6 +74,7 @@ class _PairPageState extends State<PairPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.pairedDeviceIdKey, device.deviceId);
     if (mounted) {
+      await context.read<AppStateNotifier>().refresh();
       Navigator.of(context).pushReplacementNamed('/');
     }
   }
@@ -99,6 +101,7 @@ class _PairPageState extends State<PairPage> {
           _otherDevices =
               _otherDevices.where((d) => !myIds.contains(d.deviceId)).toList();
         });
+        await context.read<AppStateNotifier>().refresh();
         Navigator.of(context).pushReplacementNamed('/');
       }
     } on AppError catch (e) {

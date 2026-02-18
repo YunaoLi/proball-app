@@ -5,6 +5,7 @@ import 'package:proballdev/app/app_shell.dart';
 import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/features/auth/auth_page.dart';
 import 'package:proballdev/features/pair/pair_page.dart';
+import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/auth_service.dart';
 
 /// Resolves initial route based on token and paired device.
@@ -27,6 +28,7 @@ class _AppInitState extends State<AppInit> {
   Future<String> _resolveRoute() async {
     final auth = context.read<AuthService>();
     await auth.loadFromStorage();
+    await context.read<AppStateNotifier>().refresh();
     if (!auth.hasToken) return '/auth';
     final prefs = await SharedPreferences.getInstance();
     final paired = prefs.getString(AppConstants.pairedDeviceIdKey);

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proballdev/models/app_error.dart';
+import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/error_manager.dart';
 
 /// Global error display: banners for warnings, blocking dialog for critical.
@@ -31,6 +32,12 @@ class _ErrorOverlayState extends State<ErrorOverlay> {
 
   void _onError(AppError error) {
     if (!mounted) return;
+
+    // Never show battery errors when user is not logged in or has no paired device.
+    if (error.type == AppErrorType.battery) {
+      final appState = context.read<AppStateNotifier>();
+      if (!appState.shouldShowBallStatus) return;
+    }
 
     switch (error.severity) {
       case AppErrorSeverity.info:

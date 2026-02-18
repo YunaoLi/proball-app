@@ -95,6 +95,8 @@ class _BatteryIndicator extends StatelessWidget {
 
   Color get _color {
     switch (batteryState.status) {
+      case BatteryStatus.unknown:
+        return theme.colorScheme.outline;
       case BatteryStatus.normal:
         return theme.colorScheme.primary;
       case BatteryStatus.low:
@@ -106,6 +108,7 @@ class _BatteryIndicator extends StatelessWidget {
   }
 
   IconData get _batteryIcon {
+    if (batteryState.isUnknown) return Icons.battery_unknown_rounded;
     final level = batteryState.percentage;
     return level >= 75
         ? Icons.battery_full_rounded
@@ -124,7 +127,7 @@ class _BatteryIndicator extends StatelessWidget {
         Icon(_batteryIcon, size: 22, color: _color),
         const SizedBox(width: 6),
         Text(
-          '${batteryState.percentage}%',
+          batteryState.isUnknown ? '—' : '${batteryState.percentage}%',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),

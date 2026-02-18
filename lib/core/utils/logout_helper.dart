@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/core/widgets/reauth_listener.dart';
+import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/auth_service.dart';
 import 'package:proballdev/services/auth_state.dart';
 import 'package:proballdev/services/device_service.dart';
@@ -49,6 +50,7 @@ Future<void> performLogout(BuildContext context) async {
   await authService.logout();
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(AppConstants.pairedDeviceIdKey);
+  await context.read<AppStateNotifier>().refresh();
 
   ReauthListener.recordReauthNavigation();
   navigator.pushNamedAndRemoveUntil('/', (_) => false);

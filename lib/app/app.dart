@@ -8,6 +8,7 @@ import 'package:proballdev/core/widgets/error_overlay.dart';
 import 'package:proballdev/core/widgets/reauth_listener.dart';
 import 'package:proballdev/services/api_client.dart';
 import 'package:proballdev/services/auth_service.dart';
+import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/auth_state.dart';
 import 'package:proballdev/services/auth_storage.dart';
 import 'package:proballdev/services/device_service.dart';
@@ -45,6 +46,9 @@ class WickedRollingBallApp extends StatelessWidget {
             ctx.read<TokenStore>(),
             ctx.read<AuthStorage>(),
           ),
+        ),
+        ChangeNotifierProvider<AppStateNotifier>(
+          create: (ctx) => AppStateNotifier(ctx.read<AuthService>())..refresh(),
         ),
         Provider<ApiClient>(
           create: (ctx) => ApiClient(

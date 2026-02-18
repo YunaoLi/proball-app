@@ -1,7 +1,15 @@
+import {
+  generateRefreshToken,
+  getIpAddress,
+  getRefreshExpiry,
+  getUserAgent,
+  hashToken,
+} from "@/lib/auth/refreshToken";
 import { auth } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { jsonError, jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
+import { randomUUID } from "crypto";
 
 const BASE_URL =
   process.env.BETTER_AUTH_URL ||
@@ -93,21 +101,48 @@ export async function POST(req: Request) {
   const expiresInSec = expiresInToSeconds(JWT_EXPIRES_IN);
   const expiresAtMs = Date.now() + expiresInSec * 1000;
 
-  // Extract session token for refresh: "better-auth.session_token=value; ..." -> value
-  let refreshToken: string | undefined;
-  const sessionCookieMatch = setCookie.match(/better-auth\.session_token=([^;]+)/i);
-  if (sessionCookieMatch?.[1]) {
-    refreshToken = sessionCookieMatch[1].trim();
+  const userId = user?.id;
+  if (!userId) {
+    logger.warn("auth/token: no user id in sign-in response");
+    return jsonError(500, "internal_error", "Could not establish session");
+  }
+
+  const refreshToken = generateRefreshToken();
+  const refreshTokenHash = hashToken(refreshToken);
+  const refreshExpiresAt = getRefreshExpiry();
+  const now = new Date();
+  const sessionId = randomUUID();
+
+  try {
+    await query(
+      `INSERT INTO session (id, "userId", token, "expiresAt", "createdAt", "updatedAt", "ipAddress", "userAgent", "lastUsedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        sessionId,
+        userId,
+        refreshTokenHash,
+        refreshExpiresAt,
+        now,
+        now,
+        getIpAddress(req) ?? null,
+        getUserAgent(req) ?? null,
+        now,
+      ]
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.error("auth/token: failed to create session row", msg);
+    return jsonError(500, "internal_error", "Could not establish session");
   }
 
   return jsonSuccess({
     accessToken,
-    refreshToken: refreshToken ?? undefined,
+    refreshToken,
     tokenType: "Bearer",
     expiresInSec,
     expiresAtMs,
     user: {
-      id: user?.id ?? "",
+      id: userId,
       email: user?.email ?? email,
       name: user?.name ?? null,
     },

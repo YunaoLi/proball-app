@@ -45,6 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ProBall needs access to save report images to your Photos.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

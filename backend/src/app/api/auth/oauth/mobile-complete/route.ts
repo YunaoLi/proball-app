@@ -1,7 +1,15 @@
+import {
+  generateRefreshToken,
+  getIpAddress,
+  getRefreshExpiry,
+  getUserAgent,
+  hashToken,
+} from "@/lib/auth/refreshToken";
 import { auth } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { jsonError, jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
+import { randomUUID } from "crypto";
 
 const BASE_URL =
   process.env.BETTER_AUTH_URL ||
@@ -84,15 +92,37 @@ export async function GET(req: Request) {
     const expiresInSec = expiresInToSeconds(JWT_EXPIRES_IN);
     const expiresAtMs = Date.now() + expiresInSec * 1000;
 
-    let refreshToken: string | undefined;
-    const sessionCookieMatch = setCookie.match(/better-auth\.session_token=([^;]+)/i);
-    if (sessionCookieMatch?.[1]) {
-      refreshToken = sessionCookieMatch[1].trim();
+    const refreshToken = generateRefreshToken();
+    const refreshTokenHash = hashToken(refreshToken);
+    const refreshExpiresAt = getRefreshExpiry();
+    const now = new Date();
+    const sessionId = randomUUID();
+
+    try {
+      await query(
+        `INSERT INTO session (id, "userId", token, "expiresAt", "createdAt", "updatedAt", "ipAddress", "userAgent", "lastUsedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          sessionId,
+          userId,
+          refreshTokenHash,
+          refreshExpiresAt,
+          now,
+          now,
+          getIpAddress(req) ?? null,
+          getUserAgent(req) ?? null,
+          now,
+        ]
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error("oauth/mobile-complete: failed to create session row", msg);
+      return jsonError(500, "internal_error", "Could not establish session");
     }
 
     return jsonSuccess({
       accessToken,
-      refreshToken: refreshToken ?? undefined,
+      refreshToken,
       tokenType: "Bearer",
       expiresInSec,
       expiresAtMs,

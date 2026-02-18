@@ -91,16 +91,17 @@ class AuthService {
     final userEmail = user?['email'] as String? ?? email;
     final userName = user?['name'] as String?;
 
-    await _authStorage.save(
+    // Update in-memory (TokenStore) first so tokenProvider sees new token immediately.
+    await _tokenStore.save(
       accessToken: accessToken,
-      refreshToken: refreshToken,
-      expiresAtMs: expiresAtMs,
       userId: userId,
       email: userEmail,
       name: userName,
     );
-    await _tokenStore.save(
+    await _authStorage.save(
       accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAtMs: expiresAtMs,
       userId: userId,
       email: userEmail,
       name: userName,
@@ -136,16 +137,17 @@ class AuthService {
       final email = user?['email'] as String? ?? _tokenStore.userEmail;
       final name = user?['name'] as String? ?? _tokenStore.userName;
 
-      await _authStorage.save(
+      // Update in-memory (TokenStore) first so tokenProvider sees new token immediately.
+      await _tokenStore.save(
         accessToken: accessToken,
-        refreshToken: newRefreshToken,
-        expiresAtMs: expiresAtMs,
         userId: userId,
         email: email,
         name: name,
       );
-      await _tokenStore.save(
+      await _authStorage.save(
         accessToken: accessToken,
+        refreshToken: newRefreshToken,
+        expiresAtMs: expiresAtMs,
         userId: userId,
         email: email,
         name: name,
@@ -156,10 +158,27 @@ class AuthService {
     }
   }
 
-  /// Logout: clear secure storage and TokenStore.
+  /// Logout: revoke refresh token on server, then clear TokenStore and secure storage.
   Future<void> logout() async {
-    await _authStorage.clear();
+    final refreshToken = await _authStorage.getRefreshToken();
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      try {
+        final uri = Uri.parse('${_baseUrl}api/auth/logout');
+        await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $refreshToken',
+          },
+          body: jsonEncode({'refreshToken': refreshToken}),
+        );
+      } catch (_) {
+        // Best-effort: continue clearing local state even if server revoke fails.
+      }
+    }
     await _tokenStore.clear();
+    await _authStorage.clear();
   }
 
   /// Sign in with Google via OAuth webview.
@@ -201,16 +220,17 @@ class AuthService {
     final userEmail = uri.queryParameters['email'];
     final userName = uri.queryParameters['name'];
 
-    await _authStorage.save(
+    // Update in-memory (TokenStore) first so tokenProvider sees new token immediately.
+    await _tokenStore.save(
       accessToken: accessToken,
-      refreshToken: refreshToken,
-      expiresAtMs: expiresAtMs,
       userId: userId,
       email: userEmail,
       name: userName,
     );
-    await _tokenStore.save(
+    await _authStorage.save(
       accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresAtMs: expiresAtMs,
       userId: userId,
       email: userEmail,
       name: userName,

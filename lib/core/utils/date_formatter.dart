@@ -38,6 +38,26 @@ class DateFormatter {
     return days[date.weekday - 1];
   }
 
+  /// Format as "Feb 18 · 1:51 PM" for report cards.
+  static String formatReportDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final hour = date.hour;
+    final minute = date.minute;
+    final ampm = hour >= 12 ? 'PM' : 'AM';
+    final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '${months[date.month - 1]} ${date.day} · $h12:${minute.toString().padLeft(2, '0')} $ampm';
+  }
+
+  /// Format duration as mm:ss for stats grid.
+  static String formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   /// Formats elapsed seconds for session display.
   /// - If elapsed < 1 min → "Xs"
   /// - If elapsed < 1 hour → "Mm Ss"

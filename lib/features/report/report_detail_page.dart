@@ -1,10 +1,11 @@
-import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proballdev/core/utils/logout_helper.dart';
+import 'package:proballdev/features/report/widgets/report_card_with_share.dart';
 import 'package:proballdev/models/ai_report.dart';
 import 'package:proballdev/models/app_error.dart';
+import 'package:proballdev/models/report_content.dart';
 import 'package:proballdev/services/report_service.dart';
 
 /// Report detail for a session. Polls until READY, then shows content.
@@ -91,7 +92,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildLoadingSkeleton(theme)
           : _error != null
               ? Center(
                   child: Padding(
@@ -115,53 +116,131 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
     );
   }
 
+  Widget _buildLoadingSkeleton(ThemeData theme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 100,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...List.generate(3, (_) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              )),
+          const SizedBox(height: 24),
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(
+                width: 100,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                width: 100,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Generating report...',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildContent(ThemeData theme, AiReport report) {
     if (report.status == 'FAILED') {
-      return Text(
-        report.failureReason ?? 'Report generation failed.',
-        style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.error),
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
+            const SizedBox(height: 16),
+            Text(
+              report.failureReason ?? 'Report generation failed.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
     final content = report.contentJson;
     if (content == null) return const SizedBox.shrink();
-    final pretty = const JsonEncoder.withIndent('  ').convert(content);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (content['summaryTitle'] != null)
-          Text(
-            content['summaryTitle'] as String,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        if (content['summary'] != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            content['summary'] as String,
-            style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-          ),
-        ],
-        const SizedBox(height: 24),
-        Text(
-          'Raw JSON',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: SelectableText(
-            pretty,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontFamily: 'monospace',
-            ),
-          ),
-        ),
-      ],
+
+    final reportContent = ReportContent.fromJson(content);
+    return ReportCardWithShare(
+      theme: theme,
+      content: reportContent,
+      showDebugPanel: kDebugMode,
     );
   }
 }

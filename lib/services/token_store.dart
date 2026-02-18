@@ -29,26 +29,30 @@ class TokenStore extends ChangeNotifier {
     String? email,
     String? name,
   }) async {
-    await _prefs.setString(AppConstants.tokenStorageKey, accessToken);
-    if (userId != null) await _prefs.setString(AppConstants.userIdStorageKey, userId);
-    if (email != null) await _prefs.setString(AppConstants.userEmailStorageKey, email);
-    if (name != null) await _prefs.setString(AppConstants.userNameStorageKey, name);
+    // Update in-memory first so tokenProvider sees new token immediately.
     _token = accessToken;
     _userId = userId;
     _userEmail = email;
     _userName = name;
     notifyListeners();
+
+    await _prefs.setString(AppConstants.tokenStorageKey, accessToken);
+    if (userId != null) await _prefs.setString(AppConstants.userIdStorageKey, userId);
+    if (email != null) await _prefs.setString(AppConstants.userEmailStorageKey, email);
+    if (name != null) await _prefs.setString(AppConstants.userNameStorageKey, name);
   }
 
   Future<void> clear() async {
-    await _prefs.remove(AppConstants.tokenStorageKey);
-    await _prefs.remove(AppConstants.userIdStorageKey);
-    await _prefs.remove(AppConstants.userEmailStorageKey);
-    await _prefs.remove(AppConstants.userNameStorageKey);
+    // Clear in-memory first so tokenProvider sees null immediately.
     _token = null;
     _userId = null;
     _userEmail = null;
     _userName = null;
     notifyListeners();
+
+    await _prefs.remove(AppConstants.tokenStorageKey);
+    await _prefs.remove(AppConstants.userIdStorageKey);
+    await _prefs.remove(AppConstants.userEmailStorageKey);
+    await _prefs.remove(AppConstants.userNameStorageKey);
   }
 }

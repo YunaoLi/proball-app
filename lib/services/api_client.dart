@@ -8,6 +8,9 @@ typedef TokenProvider = String? Function();
 /// Callback to attempt token refresh. Returns true if new tokens were stored.
 typedef RefreshCallback = Future<bool> Function();
 
+/// Optional: returns access token expiry. If null, proactive refresh is skipped.
+typedef TokenExpiryProvider = DateTime? Function();
+
 /// Callback when auth fails and we should not redirect (active play).
 typedef OnAuthFailureDuringPlay = void Function();
 
@@ -25,6 +28,7 @@ class ApiClient {
     required this.baseUrl,
     required this.tokenProvider,
     this.refreshCallback,
+    this.tokenExpiryProvider,
     this.onAuthFailureDuringPlay,
     this.onAuthFailureIdle,
     this.isPlaySessionActive,
@@ -33,17 +37,32 @@ class ApiClient {
   final String baseUrl;
   final TokenProvider tokenProvider;
   final RefreshCallback? refreshCallback;
+  final TokenExpiryProvider? tokenExpiryProvider;
   final OnAuthFailureDuringPlay? onAuthFailureDuringPlay;
   final OnAuthFailureIdle? onAuthFailureIdle;
   final IsPlaySessionActive? isPlaySessionActive;
 
   final String _baseUrl;
-  bool _refreshAttempted = false;
+  Future<bool>? _refreshInFlight;
   DateTime? _lastAuthFailure;
 
   String _url(String path) {
     final p = path.startsWith('/') ? path.substring(1) : path;
     return '$_baseUrl$p';
+  }
+
+  /// Single-flight refresh: if a refresh is already happening, await it.
+  Future<bool> _refreshOnce() async {
+    if (refreshCallback == null) return false;
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+
+    final fut = refreshCallback!().catchError((_) => false).whenComplete(() {
+      _refreshInFlight = null;
+    });
+
+    _refreshInFlight = fut;
+    return fut;
   }
 
   Future<Map<String, dynamic>> get(String path, {bool auth = false}) async {
@@ -74,6 +93,17 @@ class ApiClient {
     bool auth, {
     String? tokenUsed,
   }) async {
+    // Proactive refresh: if token expires in < 60s, refresh before request.
+    if (auth && tokenExpiryProvider != null) {
+      final expiry = tokenExpiryProvider!();
+      if (expiry != null &&
+          expiry.difference(DateTime.now()) < const Duration(seconds: 60)) {
+        await _refreshOnce();
+        // Use latest token after potential refresh.
+        tokenUsed = tokenProvider();
+      }
+    }
+
     var response = await request(tokenUsed);
 
     final hadToken = (tokenUsed != null && tokenUsed.isNotEmpty);
@@ -83,24 +113,25 @@ class ApiClient {
       return _parseJson(response);
     }
 
-    if (response.statusCode == 401 &&
-        auth &&
-        hadToken &&
-        !_refreshAttempted &&
-        refreshCallback != null) {
-      _refreshAttempted = true;
-      final refreshed = await refreshCallback!();
+    if (response.statusCode == 401 && auth && hadToken) {
+      // Attempt refresh (single-flight).
+      final refreshed = await _refreshOnce();
+
       if (refreshed) {
-        response = await request(null);
-      }
-      if (response.statusCode == 401) {
-        _refreshAttempted = false;
+        // Retry using the latest token from tokenProvider.
+        final newToken = tokenProvider();
+        response = await request(newToken);
+
+        // If still 401 after refresh, treat as auth failure.
+        if (response.statusCode == 401) {
+          _handleAuthFailureThrottled();
+          return _parseJson(response);
+        }
+      } else {
+        // Refresh failed -> handle auth failure.
         _handleAuthFailureThrottled();
         return _parseJson(response);
       }
-      _refreshAttempted = false;
-    } else if (response.statusCode == 401 && auth && hadToken) {
-      _handleAuthFailureThrottled();
     }
 
     return _parseJson(response);

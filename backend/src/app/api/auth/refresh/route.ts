@@ -1,10 +1,16 @@
-import { auth } from "@/lib/auth";
-import { jsonError, jsonSuccess } from "@/lib/http";
+import {
+  generateRefreshToken,
+  getIpAddress,
+  getRefreshExpiry,
+  getUserAgent,
+  hashToken,
+} from "@/lib/auth/refreshToken";
+import { signAccessTokenForUser } from "@/lib/auth/signAccessToken";
+import { query } from "@/lib/db";
+import { jsonSuccess } from "@/lib/http";
 import { logger } from "@/lib/logger";
+import { randomUUID } from "crypto";
 
-const BASE_URL =
-  process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001");
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "15m";
 
 function expiresInToSeconds(s: string): number {
@@ -19,60 +25,112 @@ function expiresInToSeconds(s: string): number {
   return n * 60;
 }
 
+function refreshInvalid(): Response {
+  return Response.json({ error: "REFRESH_INVALID" }, { status: 401 });
+}
+
+/**
+ * Parse refresh token from Authorization: Bearer (preferred) or JSON body.
+ */
+async function parseRefreshToken(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+  try {
+    const body = (await req.json()) as { refreshToken?: string };
+    const token = typeof body?.refreshToken === "string" ? body.refreshToken.trim() : "";
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/auth/refresh
- * Body: { refreshToken: string }
- * Uses the session token to obtain a new JWT from Better Auth.
+ * Authorization: Bearer <refreshToken> (preferred) or body: { refreshToken: string }
+ * Rotates refresh token: revokes old session, creates new session, returns new access + refresh.
  */
 export async function POST(req: Request) {
-  let body: { refreshToken?: string };
-  try {
-    body = (await req.json()) as { refreshToken?: string };
-  } catch {
-    return jsonError(400, "invalid_body", "Invalid JSON body");
-  }
-  const refreshToken = typeof body?.refreshToken === "string" ? body.refreshToken.trim() : "";
+  const refreshToken = await parseRefreshToken(req);
   if (!refreshToken) {
-    return jsonError(401, "invalid_refresh_token", "Refresh token required");
+    return refreshInvalid();
   }
 
-  const cookie = `better-auth.session_token=${refreshToken}`;
-  const tokenUrl = `${BASE_URL}/api/auth/token`;
-  const tokenReq = new Request(tokenUrl, {
-    method: "GET",
-    headers: { Cookie: cookie },
-  });
-  const tokenRes = await auth.handler(tokenReq);
-  if (!tokenRes.ok) {
-    logger.warn("auth/refresh: get token failed", tokenRes.status);
-    return jsonError(401, "invalid_refresh_token", "Session expired. Please log in again.");
+  const hash = hashToken(refreshToken);
+
+  const validSessionRes = await query<{ id: string; userId: string }>(
+    `SELECT id, "userId" FROM session
+     WHERE token = $1 AND "expiresAt" > now() AND "revokedAt" IS NULL`,
+    [hash]
+  );
+
+  if (validSessionRes.rows.length === 0) {
+    const revokedSessionRes = await query<{ userId: string }>(
+      `SELECT "userId" FROM session WHERE token = $1 AND "revokedAt" IS NOT NULL`,
+      [hash]
+    );
+    if (revokedSessionRes.rows.length > 0) {
+      const userId = revokedSessionRes.rows[0].userId;
+      logger.warn("auth/refresh: reuse detected, revoking all sessions for user", {
+        userId: userId.slice(0, 8) + "***",
+      });
+      await query(`UPDATE session SET "revokedAt" = now() WHERE "userId" = $1`, [userId]);
+    }
+    return refreshInvalid();
   }
-  let tokenData: { token?: string };
+
+  const oldSession = validSessionRes.rows[0];
+  const { id: oldSessionId, userId } = oldSession;
+
+  const newRefreshToken = generateRefreshToken();
+  const newHash = hashToken(newRefreshToken);
+  const refreshExpiresAt = getRefreshExpiry();
+  const now = new Date();
+  const newSessionId = randomUUID();
+
   try {
-    tokenData = (await tokenRes.json()) as { token?: string };
-  } catch {
-    return jsonError(500, "internal_error", "Invalid token response");
-  }
-  const accessToken = tokenData?.token;
-  if (!accessToken || typeof accessToken !== "string") {
-    return jsonError(401, "invalid_refresh_token", "Could not issue token");
+    await query(
+      `INSERT INTO session (id, "userId", token, "expiresAt", "createdAt", "updatedAt", "ipAddress", "userAgent", "lastUsedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        newSessionId,
+        userId,
+        newHash,
+        refreshExpiresAt,
+        now,
+        now,
+        getIpAddress(req) ?? null,
+        getUserAgent(req) ?? null,
+        now,
+      ]
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.error("auth/refresh: failed to create new session", msg);
+    return Response.json({ error: "REFRESH_INVALID" }, { status: 500 });
   }
 
-  const setCookie = tokenRes.headers.get("set-cookie");
-  let newRefreshToken: string | undefined;
-  if (setCookie) {
-    const match = setCookie.match(/better-auth\.session_token=([^;]+)/i);
-    if (match?.[1]) newRefreshToken = match[1].trim();
+  await query(
+    `UPDATE session SET "revokedAt" = $1, "replacedBySessionId" = $2, "lastUsedAt" = $1 WHERE id = $3`,
+    [now, newSessionId, oldSessionId]
+  );
+
+  let accessToken: string;
+  try {
+    accessToken = await signAccessTokenForUser(userId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.error("auth/refresh: failed to sign access token", msg);
+    return Response.json({ error: "REFRESH_INVALID" }, { status: 500 });
   }
+
   const expiresInSec = expiresInToSeconds(JWT_EXPIRES_IN);
-  const expiresAtMs = Date.now() + expiresInSec * 1000;
 
   return jsonSuccess({
     accessToken,
-    refreshToken: newRefreshToken ?? refreshToken,
-    tokenType: "Bearer",
+    refreshToken: newRefreshToken,
     expiresInSec,
-    expiresAtMs,
-    user: null,
   });
 }

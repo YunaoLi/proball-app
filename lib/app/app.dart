@@ -18,6 +18,8 @@ import 'package:proballdev/services/play_session_state.dart';
 import 'package:proballdev/services/report_notifier.dart';
 import 'package:proballdev/services/report_service.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
+import 'package:proballdev/services/stats_service.dart';
 import 'package:proballdev/services/token_store.dart';
 
 /// Root application widget.
@@ -72,6 +74,12 @@ class WickedRollingBallApp extends StatelessWidget {
         ),
         Provider<ReportService>(
           create: (ctx) => ReportService(ctx.read<ApiClient>()),
+        ),
+        Provider<StatsService>(
+          create: (ctx) => StatsService(ctx.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider<StatsNotifier>(
+          create: (ctx) => StatsNotifier(ctx.read<StatsService>())..refresh(),
         ),
         ChangeNotifierProvider<DeviceService>(
           create: (ctx) => MockDeviceService(

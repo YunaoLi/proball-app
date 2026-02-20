@@ -1,29 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:proballdev/core/utils/date_formatter.dart';
-import 'package:proballdev/models/play_stats.dart';
+import 'package:proballdev/models/stats.dart';
 
-/// Aggregate play statistics: Total play time (includes live session), Calories burned.
-/// Two side-by-side cards. Dark mode ready.
+/// Aggregate play statistics: Total play time, Calories burned.
+/// Two side-by-side cards. Dark mode ready. Uses [TodayStats] from API.
 class PlayStatsCards extends StatelessWidget {
-  const PlayStatsCards({super.key, required this.stats});
+  const PlayStatsCards({super.key, this.todayStats, this.loading = false});
 
-  final List<PlayStats> stats;
-
-  int get _totalElapsedSeconds =>
-      stats.fold<int>(0, (sum, s) => sum + s.elapsedTime);
-
-  double get _totalCalories => stats.fold<double>(0, (sum, s) => sum + s.caloriesBurned);
+  final TodayStats? todayStats;
+  final bool loading;
 
   String get _formattedTotalTime {
-    final total = _totalElapsedSeconds;
+    final total = todayStats?.totalPlayTimeSec ?? 0;
     if (total == 0) return '0s';
     return DateFormatter.formatElapsedSeconds(total);
   }
+
+  double get _totalCalories => todayStats?.totalCalories ?? 0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    if (loading) {
+      return Row(
+        children: [
+          Expanded(child: _StatCard(icon: Icons.schedule_rounded, label: 'Total Play Time', value: '—', theme: theme, isDark: isDark)),
+          const SizedBox(width: 12),
+          Expanded(child: _StatCard(icon: Icons.local_fire_department_rounded, label: 'Calories Burned', value: '—', unit: 'cal', theme: theme, isDark: isDark)),
+        ],
+      );
+    }
 
     return Row(
       children: [

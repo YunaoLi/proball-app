@@ -1,6 +1,7 @@
 #!/bin/bash
-# End-to-end curl test: token → pair → start → end → reports
-# Usage: BASE=https://proball-app.vercel.app EMAIL=you@example.com PASSWORD=pass ./docs/sessions_reports_test.sh
+# End-to-end curl test: token → pair → start → end → reports → stats
+# Usage: BASE=http://localhost:3001 EMAIL=you@example.com PASSWORD=pass ./docs/sessions_reports_test.sh
+# For Vercel: BASE=https://proball-app.vercel.app (ensure stats routes are deployed)
 
 BASE="${BASE:-https://proball-app.vercel.app}"
 EMAIL="${EMAIL:-you@example.com}"
@@ -59,6 +60,22 @@ curl -s "$BASE/api/reports" -H "Authorization: Bearer $TOKEN" | jq .
 echo ""
 echo "=== 7. Get report by session ==="
 curl -s "$BASE/api/reports/$SESSION_ID" -H "Authorization: Bearer $TOKEN" | jq .
+
+echo ""
+echo "=== 8. Stats today ==="
+_resp=$(curl -s -w "\n%{http_code}" "$BASE/api/stats/today" -H "Authorization: Bearer $TOKEN")
+_code=$(echo "$_resp" | tail -n1)
+_body=$(echo "$_resp" | sed '$d')
+echo "$_body" | jq . 2>/dev/null || echo "$_body"
+[ "$_code" != "200" ] && echo "(HTTP $_code - deploy stats routes if using Vercel)"
+
+echo ""
+echo "=== 9. Stats weekly (7 days, ascending) ==="
+_resp=$(curl -s -w "\n%{http_code}" "$BASE/api/stats/weekly?days=7" -H "Authorization: Bearer $TOKEN")
+_code=$(echo "$_resp" | tail -n1)
+_body=$(echo "$_resp" | sed '$d')
+echo "$_body" | jq . 2>/dev/null || echo "$_body"
+[ "$_code" != "200" ] && echo "(HTTP $_code - deploy stats routes if using Vercel)"
 
 echo ""
 echo "=== Done ==="

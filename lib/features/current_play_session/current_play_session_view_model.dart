@@ -10,6 +10,7 @@ import 'package:proballdev/services/play_session_state.dart';
 import 'package:proballdev/services/report_notifier.dart';
 import 'package:proballdev/services/report_service.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// View model for the Current Play Session screen.
 /// Shows live session data: timer, calories, distance, path.
@@ -23,8 +24,10 @@ class CurrentPlaySessionViewModel extends ChangeNotifier {
     required this.deviceId,
     PlaySessionStateNotifier? playSessionState,
     ReportNotifier? reportNotifier,
+    StatsNotifier? statsNotifier,
   })  : _playSessionState = playSessionState,
-        _reportNotifier = reportNotifier {
+        _reportNotifier = reportNotifier,
+        _statsNotifier = statsNotifier {
     _deviceService.addListener(_onDeviceServiceUpdate);
     _deviceService.positionStream.listen(_onPositionsUpdate);
     if (_deviceService.isRolling) _startTimer();
@@ -35,6 +38,7 @@ class CurrentPlaySessionViewModel extends ChangeNotifier {
   final ReportService _reportService;
   final PlaySessionStateNotifier? _playSessionState;
   final ReportNotifier? _reportNotifier;
+  final StatsNotifier? _statsNotifier;
   final String sessionId;
   final String deviceId;
 
@@ -171,6 +175,7 @@ class CurrentPlaySessionViewModel extends ChangeNotifier {
     );
     _playSessionState?.setIdle();
     _reportNotifier?.refreshReports();
+    _statsNotifier?.refresh();
     if (context.mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(

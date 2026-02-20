@@ -3,21 +3,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/models/ball_status.dart';
 import 'package:proballdev/models/pet_mood.dart';
-import 'package:proballdev/models/play_stats.dart';
+import 'package:proballdev/models/stats.dart';
 import 'package:proballdev/services/device_service.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// View model for the dashboard screen.
 /// Consumes data from [DeviceService] for live updates.
-/// Integrates with backend: startSession, then startRoll.
+/// Stats from [StatsNotifier] (API-backed, persists across app restarts).
 class DashboardViewModel extends ChangeNotifier {
-  DashboardViewModel(this._deviceService, this._sessionService) {
+  DashboardViewModel(this._deviceService, this._sessionService, this._statsNotifier) {
     _deviceService.addListener(_onDeviceServiceUpdate);
+    _statsNotifier.addListener(_onStatsUpdate);
     _loadPairedDevice();
   }
 
   final DeviceService _deviceService;
   final SessionService _sessionService;
+  final StatsNotifier _statsNotifier;
 
   String? _pairedDeviceId;
   String? get pairedDeviceId => _pairedDeviceId;
@@ -30,7 +33,8 @@ class DashboardViewModel extends ChangeNotifier {
 
   BallStatus get ballStatus => _deviceService.status;
 
-  List<PlayStats> get recentStats => _deviceService.recentStats;
+  TodayStats? get todayStats => _statsNotifier.todayStats;
+  bool get statsLoading => _statsNotifier.loading;
 
   PetMood get currentPetMood => _deviceService.currentPetMood;
 
@@ -62,13 +66,19 @@ class DashboardViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onStatsUpdate() {
+    notifyListeners();
+  }
+
   void refresh() {
+    _statsNotifier.refresh();
     notifyListeners();
   }
 
   @override
   void dispose() {
     _deviceService.removeListener(_onDeviceServiceUpdate);
+    _statsNotifier.removeListener(_onStatsUpdate);
     super.dispose();
   }
 }

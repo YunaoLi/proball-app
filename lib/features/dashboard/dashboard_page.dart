@@ -11,6 +11,7 @@ import 'package:proballdev/features/dashboard/widgets/pet_mood_indicator.dart';
 import 'package:proballdev/features/dashboard/widgets/play_stats_card.dart';
 import 'package:proballdev/services/device_service.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// Dashboard (home) screen: device status, play stats, pet mood, CTA.
 /// Modern, clean, rounded cards. Soft shadows. Apple-like spacing. Dark mode ready.
@@ -23,6 +24,7 @@ class DashboardPage extends StatelessWidget {
       create: (_) => DashboardViewModel(
         context.read<DeviceService>(),
         context.read<SessionService>(),
+        context.read<StatsNotifier>(),
       ),
       child: const _DashboardView(),
     );
@@ -73,7 +75,10 @@ class _DashboardView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    PlayStatsCards(stats: viewModel.recentStats),
+                    PlayStatsCards(
+                      todayStats: viewModel.todayStats,
+                      loading: viewModel.statsLoading,
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       'Pet Mood',

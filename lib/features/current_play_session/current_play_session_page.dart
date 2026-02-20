@@ -10,6 +10,7 @@ import 'package:proballdev/services/play_session_state.dart';
 import 'package:proballdev/services/report_notifier.dart';
 import 'package:proballdev/services/report_service.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// Live session screen shown when play is active.
 /// Large timer, real-time metrics, path map, Stop Play button.
@@ -32,6 +33,7 @@ class CurrentPlaySessionPage extends StatelessWidget {
             deviceId: deviceId,
             playSessionState: ctx.read<PlaySessionStateNotifier>(),
             reportNotifier: ctx.read<ReportNotifier>(),
+            statsNotifier: ctx.read<StatsNotifier>(),
           ),
           child: CurrentPlaySessionPage(sessionId: sessionId, deviceId: deviceId),
         ),

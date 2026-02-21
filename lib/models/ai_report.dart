@@ -62,19 +62,26 @@ class AiReport {
   }
 
   /// Parse from list item (GET /api/reports).
+  /// Uses startedAt (session time) when available, else updatedAt.
+  /// Parsed timestamps are UTC; call .toLocal() when formatting for display.
   factory AiReport.fromListJson(Map<String, dynamic> json) {
+    final startedAt = json['startedAt'] as String?;
     final updatedAt = json['updatedAt'] as String?;
+    final isoString = startedAt ?? updatedAt;
+    final DateTime timestamp = isoString != null
+        ? (DateTime.tryParse(isoString) ?? DateTime.now())
+        : DateTime.now();
     return AiReport(
       sessionId: json['sessionId'] as String? ?? '',
       status: json['status'] as String?,
       summaryText: '',
       mood: PetMood.happy,
       confidence: 0,
-      timestamp: updatedAt != null ? DateTime.tryParse(updatedAt) ?? DateTime.now() : DateTime.now(),
+      timestamp: timestamp,
       caloriesBurned: (json['calories'] as num?)?.toDouble(),
       elapsedSeconds: (json['durationSec'] as num?)?.toInt(),
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'] as String) : null,
-      updatedAt: updatedAt != null ? DateTime.tryParse(updatedAt) : null,
+      updatedAt: updatedAt != null ? DateTime.tryParse(updatedAt as String) : null,
     );
   }
 

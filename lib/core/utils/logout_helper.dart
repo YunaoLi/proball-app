@@ -50,6 +50,7 @@ Future<void> performLogout(BuildContext context) async {
   await authService.logout();
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(AppConstants.pairedDeviceIdKey);
+  await prefs.remove(AppConstants.lastSyncedTimezoneKey);
   await context.read<AppStateNotifier>().refresh();
 
   ReauthListener.recordReauthNavigation();

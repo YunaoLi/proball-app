@@ -33,10 +33,24 @@ export async function POST(req: Request) {
     typeof body?.batteryStart === "number" && body.batteryStart >= 0 && body.batteryStart <= 100
       ? body.batteryStart
       : null;
-  const startedAt =
+
+  const startedAtRaw =
     typeof body?.startedAt === "string" && body.startedAt.trim()
       ? body.startedAt.trim()
       : null;
+  let startedAt: string | null = null;
+  if (startedAtRaw) {
+    const d = new Date(startedAtRaw);
+    if (!Number.isNaN(d.getTime()) && /Z$|[+-]\d{2}:?\d{2}$/i.test(startedAtRaw)) {
+      startedAt = d.toISOString();
+    } else {
+      logger.warn("sessions/start: invalid startedAt (must be ISO8601 with timezone)", {
+        userId,
+        startedAtRaw,
+      });
+      return jsonError(400, "invalid_started_at", "startedAt must be ISO8601 with timezone (Z or offset)");
+    }
+  }
 
   const paired = await query<{ device_id: string }>(
     `SELECT 1 FROM user_devices WHERE user_id = $1 AND device_id = $2`,

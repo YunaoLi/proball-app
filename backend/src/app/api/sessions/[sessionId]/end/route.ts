@@ -42,8 +42,18 @@ export async function POST(req: Request, { params }: Params) {
     body = {};
   }
 
-  const endedAt =
+  const endedAtRaw =
     typeof body?.endedAt === "string" && body.endedAt.trim() ? body.endedAt.trim() : null;
+
+  // Parse endedAt: must be ISO8601 with timezone (Z or offset). Reject ambiguous local-only strings.
+  let endedAt: string | null = null;
+  if (endedAtRaw) {
+    const d = new Date(endedAtRaw);
+    if (!Number.isNaN(d.getTime()) && /Z$|[+-]\d{2}:?\d{2}$/i.test(endedAtRaw)) {
+      endedAt = d.toISOString();
+    }
+  }
+
   const durationSec =
     typeof body?.durationSec === "number" && body.durationSec >= 0 ? body.durationSec : null;
   const calories =
@@ -104,6 +114,11 @@ export async function POST(req: Request, { params }: Params) {
       }
 
       const finalEndedAt = endedAt ?? new Date().toISOString();
+      const endedAtDate = new Date(finalEndedAt);
+      const startedAtDate = new Date(session.started_at);
+      if (endedAtDate < startedAtDate) {
+        return { kind: "invalid_time_range" as const };
+      }
       const finalDurationSec =
         durationSec ??
         (session.started_at && finalEndedAt
@@ -170,6 +185,10 @@ export async function POST(req: Request, { params }: Params) {
     if (result.kind === "not_found") {
       logger.warn("sessions/end: session not found", { userId, sessionId });
       return jsonError(404, "session_not_found", "Session not found");
+    }
+    if (result.kind === "invalid_time_range") {
+      logger.warn("sessions/end: endedAt before startedAt", { userId, sessionId });
+      return jsonError(400, "INVALID_TIME_RANGE", "endedAt must be >= startedAt");
     }
 
     const session = result.session;

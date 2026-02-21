@@ -7,6 +7,7 @@ import 'package:proballdev/features/map/map_page.dart';
 import 'package:proballdev/features/report/ai_report_list_page.dart';
 import 'package:proballdev/features/settings/settings_page.dart';
 import 'package:proballdev/services/auth_state.dart';
+import 'package:proballdev/services/timezone_service.dart';
 
 /// Tab shell with bottom navigation. Preserves state between tabs using IndexedStack.
 class AppShell extends StatefulWidget {
@@ -18,6 +19,16 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<TimezoneService>().syncIfNeeded();
+      }
+    });
+  }
 
   static const _pages = [
     DashboardPage(),

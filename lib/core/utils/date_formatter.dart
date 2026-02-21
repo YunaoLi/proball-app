@@ -21,16 +21,17 @@ class DateFormatter {
   }
 
   static String formatSessionDate(DateTime date) {
+    final local = date.toLocal();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final sessionDay = DateTime(date.year, date.month, date.day);
+    final sessionDay = DateTime(local.year, local.month, local.day);
     final diff = today.difference(sessionDay).inDays;
 
-    final time = formatTime(date);
+    final time = formatTime(local);
     if (diff == 0) return 'Today $time';
     if (diff == 1) return 'Yesterday $time';
-    if (diff < 7) return '${_weekday(date)} $time';
-    return formatDate(date);
+    if (diff < 7) return '${_weekday(local)} $time';
+    return formatDate(local);
   }
 
   static String _weekday(DateTime date) {
@@ -39,16 +40,18 @@ class DateFormatter {
   }
 
   /// Format as "Feb 18 · 1:51 PM" for report cards.
+  /// Converts UTC timestamps to user's local timezone for display.
   static String formatReportDate(DateTime date) {
+    final local = date.toLocal();
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final hour = date.hour;
-    final minute = date.minute;
+    final hour = local.hour;
+    final minute = local.minute;
     final ampm = hour >= 12 ? 'PM' : 'AM';
     final h12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    return '${months[date.month - 1]} ${date.day} · $h12:${minute.toString().padLeft(2, '0')} $ampm';
+    return '${months[local.month - 1]} ${local.day} · $h12:${minute.toString().padLeft(2, '0')} $ampm';
   }
 
   /// Format duration as mm:ss for stats grid.

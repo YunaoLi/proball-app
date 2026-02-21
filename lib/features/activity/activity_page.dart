@@ -12,9 +12,10 @@ import 'package:proballdev/features/current_play_session/current_play_session_pa
 import 'package:proballdev/services/device_service.dart';
 import 'package:proballdev/services/play_session_state.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// Activity page: recent sessions, calories chart, duration chart.
-/// Uses mock historical data for charts. Dark mode ready.
+/// Charts use /api/stats/weekly (real DB data). Dark mode ready.
 class ActivityPage extends StatelessWidget {
   const ActivityPage({super.key});
 
@@ -24,6 +25,7 @@ class ActivityPage extends StatelessWidget {
       create: (_) => ActivityViewModel(
         context.read<DeviceService>(),
         context.read<SessionService>(),
+        context.read<StatsNotifier>(),
         playSessionState: context.read<PlaySessionStateNotifier>(),
       ),
       child: const _ActivityView(),
@@ -94,7 +96,7 @@ class _ActivityView extends StatelessWidget {
                     ),
                     const SizedBox(height: 32),
                     Text(
-                      'Calories Burned',
+                      'Calories Burned (cal)',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -105,12 +107,18 @@ class _ActivityView extends StatelessWidget {
                       isDark: isDark,
                       child: SizedBox(
                         height: 200,
-                        child: CaloriesChart(dataPoints: viewModel.caloriesHistory),
+                        child: viewModel.chartsLoading
+                            ? Center(
+                                child: CircularProgressIndicator(
+                                  color: theme.colorScheme.primary,
+                                ),
+                              )
+                            : CaloriesChart(dataPoints: viewModel.caloriesHistory),
                       ),
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Session Duration',
+                      'Session Duration (min)',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -121,7 +129,13 @@ class _ActivityView extends StatelessWidget {
                       isDark: isDark,
                       child: SizedBox(
                         height: 200,
-                        child: DurationChart(dataPoints: viewModel.durationHistory),
+                        child: viewModel.chartsLoading
+                            ? Center(
+                                child: CircularProgressIndicator(
+                                  color: theme.colorScheme.secondary,
+                                ),
+                              )
+                            : DurationChart(dataPoints: viewModel.durationHistory),
                       ),
                     ),
                     const SizedBox(height: 24),

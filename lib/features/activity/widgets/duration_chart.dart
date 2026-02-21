@@ -1,9 +1,26 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:proballdev/core/utils/date_formatter.dart';
 import 'package:proballdev/features/activity/activity_view_model.dart';
 
-/// Bar chart: Session duration (minutes) over time (last 7 days).
-/// Mock historical data. Dark mode ready.
+const _unit = 'min';
+
+double _computeMaxY(List<ChartDataPoint> dataPoints) {
+  if (dataPoints.isEmpty) return 15.0;
+  final maxVal = dataPoints.map((p) => p.value).fold<double>(0, (a, b) => a > b ? a : b);
+  return (maxVal * 1.2).clamp(5.0, 180.0);
+}
+
+double _computeInterval(double maxY) {
+  if (maxY <= 5) return 1;
+  if (maxY <= 10) return 2;
+  if (maxY <= 20) return 5;
+  if (maxY <= 60) return 10;
+  if (maxY <= 120) return 30;
+  return 60;
+}
+
+/// Bar chart: Session duration (minutes) over time (last 7 days). Y-axis in min.
 class DurationChart extends StatelessWidget {
   const DurationChart({super.key, required this.dataPoints});
 
@@ -13,10 +30,8 @@ class DurationChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme.secondary;
-    final maxY = dataPoints.isEmpty
-        ? 15.0
-        : (dataPoints.map((p) => p.value).fold<double>(0, (a, b) => a > b ? a : b) * 1.2)
-            .clamp(10.0, 60.0);
+    final maxY = _computeMaxY(dataPoints);
+    final interval = _computeInterval(maxY);
 
     return BarChart(
       BarChartData(
@@ -40,7 +55,27 @@ class DurationChart extends StatelessWidget {
           );
         }).toList(),
         titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 44,
+              interval: interval,
+              getTitlesWidget: (value, meta) {
+                final v = value.toInt();
+                if (v < 0 || v > maxY) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    '$v $_unit',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           bottomTitles: AxisTitles(
@@ -67,13 +102,34 @@ class DurationChart extends StatelessWidget {
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: maxY / 4,
+          horizontalInterval: interval,
           getDrawingHorizontalLine: (value) => FlLine(
             color: theme.colorScheme.outline.withValues(alpha: 0.15),
             strokeWidth: 1,
           ),
         ),
         borderData: FlBorderData(show: false),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => theme.colorScheme.surfaceContainerHighest,
+            tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            tooltipRoundedRadius: 8,
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              if (groupIndex < 0 || groupIndex >= dataPoints.length) return null;
+              final label = dataPoints[groupIndex].label;
+              final totalSec = (rod.toY * 60).round();
+              final valueStr = DateFormatter.formatDuration(totalSec);
+              return BarTooltipItem(
+                '$label • $valueStr',
+                TextStyle(
+                  color: theme.colorScheme.onSurface,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              );
+            },
+          ),
+        ),
       ),
       duration: const Duration(milliseconds: 300),
     );

@@ -14,6 +14,7 @@ class AppConstants {
   static const String userEmailStorageKey = 'auth_user_email';
   static const String userNameStorageKey = 'auth_user_name';
   static const String pairedDeviceIdKey = 'paired_device_id';
+  static const String lastSyncedTimezoneKey = 'last_synced_timezone';
 
   /// When true, mock BLE scan emits 0–2 nearby devices. When false, scan is empty.
   static const bool mockHasNearbyDevices = true;

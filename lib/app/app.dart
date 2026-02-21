@@ -20,6 +20,7 @@ import 'package:proballdev/services/report_service.dart';
 import 'package:proballdev/services/session_service.dart';
 import 'package:proballdev/services/stats_notifier.dart';
 import 'package:proballdev/services/stats_service.dart';
+import 'package:proballdev/services/timezone_service.dart';
 import 'package:proballdev/services/token_store.dart';
 
 /// Root application widget.
@@ -77,6 +78,9 @@ class WickedRollingBallApp extends StatelessWidget {
         ),
         Provider<StatsService>(
           create: (ctx) => StatsService(ctx.read<ApiClient>()),
+        ),
+        Provider<TimezoneService>(
+          create: (ctx) => TimezoneService(ctx.read<ApiClient>(), prefs),
         ),
         ChangeNotifierProvider<StatsNotifier>(
           create: (ctx) => StatsNotifier(ctx.read<StatsService>())..refresh(),

@@ -10,6 +10,7 @@ import 'package:proballdev/models/discovered_device.dart';
 import 'package:proballdev/models/paired_device.dart';
 import 'package:proballdev/services/app_state.dart';
 import 'package:proballdev/services/device_service.dart';
+import 'package:proballdev/services/timezone_service.dart';
 
 /// Pair Device screen. Two sections: My Devices (from API) and Other Devices (from BLE/mock scan).
 class PairPage extends StatefulWidget {
@@ -34,6 +35,7 @@ class _PairPageState extends State<PairPage> {
     final deviceService = _deviceService!;
 
     if (_myDevices == null) {
+      context.read<TimezoneService>().syncIfNeeded();
       deviceService.fetchMyDevices().then((list) {
         if (mounted) {
           setState(() {

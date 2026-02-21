@@ -3,9 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:proballdev/core/constants/app_constants.dart';
 import 'package:proballdev/models/ball_status.dart';
 import 'package:proballdev/models/play_stats.dart';
+import 'package:proballdev/models/stats.dart';
 import 'package:proballdev/services/device_service.dart';
 import 'package:proballdev/services/play_session_state.dart';
 import 'package:proballdev/services/session_service.dart';
+import 'package:proballdev/services/stats_notifier.dart';
 
 /// Data point for charts (date-based).
 class ChartDataPoint {
@@ -20,20 +22,46 @@ class ChartDataPoint {
   final String label;
 }
 
+const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/// Maps ISO date (YYYY-MM-DD) to weekday label using local timezone.
+/// Ensures "Sat/Sun/Mon…" matches the actual calendar date.
+String _dateToWeekdayLabel(String dateStr) {
+  if (dateStr.isEmpty) return '';
+  try {
+    final parts = dateStr.split('-');
+    if (parts.length == 3) {
+      final d = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+      return _weekdayLabels[d.weekday - 1];
+    }
+    return dateStr.length >= 10 ? dateStr.substring(5, 10) : dateStr;
+  } catch (_) {
+    return dateStr.length >= 10 ? dateStr.substring(5, 10) : dateStr;
+  }
+}
+
 /// View model for the Activity screen.
-/// Provides recent sessions, mock historical data for charts.
+/// Charts use [StatsNotifier.weeklyStats] from API (oldest → newest).
 class ActivityViewModel extends ChangeNotifier {
   ActivityViewModel(
     this._deviceService,
-    this._sessionService, {
+    this._sessionService,
+    this._statsNotifier, {
     PlaySessionStateNotifier? playSessionState,
   })  : _playSessionState = playSessionState {
     _deviceService.addListener(_onDeviceServiceUpdate);
+    _statsNotifier.addListener(_onStatsUpdate);
     _loadPairedDevice();
+    _statsNotifier.refresh();
   }
 
   final DeviceService _deviceService;
   final SessionService _sessionService;
+  final StatsNotifier _statsNotifier;
   final PlaySessionStateNotifier? _playSessionState;
 
   String? _pairedDeviceId;
@@ -59,51 +87,52 @@ class ActivityViewModel extends ChangeNotifier {
   /// Recent play sessions (live from DeviceService).
   List<PlayStats> get recentSessions => _deviceService.recentStats;
 
-  /// Mock historical data: last 7 days for charts.
-  /// Calories burned per day.
-  List<ChartDataPoint> get caloriesHistory => _mockCaloriesHistory;
+  /// Weekly calories from API. Oldest → newest. Labels: Thu, Fri, …
+  List<ChartDataPoint> get caloriesHistory => _weeklyToCaloriesPoints(_statsNotifier.weeklyStats);
 
-  /// Mock historical data: session duration (minutes) per day.
-  List<ChartDataPoint> get durationHistory => _mockDurationHistory;
+  /// Weekly duration (minutes) from API. Oldest → newest.
+  List<ChartDataPoint> get durationHistory => _weeklyToDurationPoints(_statsNotifier.weeklyStats);
 
-  static const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  bool get chartsLoading => _statsNotifier.loading;
 
-  static List<ChartDataPoint> get _mockCaloriesHistory {
-    final now = DateTime.now();
-    return [
-      _chartPoint(now, 6, 8.2),
-      _chartPoint(now, 5, 12.5),
-      _chartPoint(now, 4, 6.8),
-      _chartPoint(now, 3, 15.3),
-      _chartPoint(now, 2, 10.1),
-      _chartPoint(now, 1, 18.4),
-      _chartPoint(now, 0, 14.0),
-    ];
+  static List<ChartDataPoint> _weeklyToCaloriesPoints(List<DailyStats> days) {
+    return days.map((ds) => ChartDataPoint(
+      date: _parseDate(ds.date),
+      value: ds.totalCalories.toDouble(),
+      label: _dateToWeekdayLabel(ds.date),
+    )).toList();
   }
 
-  static ChartDataPoint _chartPoint(DateTime now, int daysAgo, double value) {
-    final date = now.subtract(Duration(days: daysAgo));
-    return ChartDataPoint(
-      date: date,
-      value: value,
-      label: _weekdayLabels[date.weekday - 1],
-    );
+  static List<ChartDataPoint> _weeklyToDurationPoints(List<DailyStats> days) {
+    return days.map((ds) => ChartDataPoint(
+      date: _parseDate(ds.date),
+      value: ds.totalPlayTimeSec / 60.0,
+      label: _dateToWeekdayLabel(ds.date),
+    )).toList();
   }
 
-  static List<ChartDataPoint> get _mockDurationHistory {
-    final now = DateTime.now();
-    return [
-      _chartPoint(now, 6, 5),
-      _chartPoint(now, 5, 8),
-      _chartPoint(now, 4, 4),
-      _chartPoint(now, 3, 10),
-      _chartPoint(now, 2, 7),
-      _chartPoint(now, 1, 12),
-      _chartPoint(now, 0, 9),
-    ];
+  /// Parse ISO date as local calendar date (for correct weekday).
+  static DateTime _parseDate(String s) {
+    try {
+      final parts = s.split('-');
+      if (parts.length == 3) {
+        return DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+        );
+      }
+      return DateTime.tryParse(s) ?? DateTime.now();
+    } catch (_) {
+      return DateTime.now();
+    }
   }
 
   void _onDeviceServiceUpdate() {
+    notifyListeners();
+  }
+
+  void _onStatsUpdate() {
     notifyListeners();
   }
 
@@ -141,6 +170,7 @@ class ActivityViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _deviceService.removeListener(_onDeviceServiceUpdate);
+    _statsNotifier.removeListener(_onStatsUpdate);
     super.dispose();
   }
 }
